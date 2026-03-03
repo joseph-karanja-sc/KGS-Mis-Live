@@ -1,0 +1,25 @@
+{
+    "name": "nwidart/frontoffice",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "App\\Modules\\FrontOffice\\Providers\\FrontOfficeServiceProvider"
+            ],
+            "aliases": {
+                
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\Modules\\FrontOffice\\": ""
+        }
+    }
+}

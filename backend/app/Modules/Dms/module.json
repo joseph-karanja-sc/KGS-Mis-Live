@@ -1,0 +1,14 @@
+{
+    "name": "Dms",
+    "alias": "dms",
+    "description": "",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "App\\Modules\\Dms\\Providers\\DmsServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

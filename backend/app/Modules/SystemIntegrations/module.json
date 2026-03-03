@@ -1,0 +1,14 @@
+{
+    "name": "SystemIntegrations",
+    "alias": "systemintegrations",
+    "description": "",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "App\\Modules\\SystemIntegrations\\Providers\\SystemIntegrationsServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

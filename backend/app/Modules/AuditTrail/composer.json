@@ -1,0 +1,25 @@
+{
+    "name": "nwidart/audittrail",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "App\\Modules\\AuditTrail\\Providers\\AuditTrailServiceProvider"
+            ],
+            "aliases": {
+                
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\Modules\\AuditTrail\\": ""
+        }
+    }
+}

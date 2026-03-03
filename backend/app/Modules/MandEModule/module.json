@@ -1,0 +1,14 @@
+{
+    "name": "MandEModule",
+    "alias": "mandemodule",
+    "description": "",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "App\\Modules\\MandEModule\\Providers\\MandEModuleServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

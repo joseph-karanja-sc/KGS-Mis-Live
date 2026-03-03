@@ -1,0 +1,25 @@
+{
+    "name": "nwidart/systemintegrations",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "App\\Modules\\SystemIntegrations\\Providers\\SystemIntegrationsServiceProvider"
+            ],
+            "aliases": {
+                
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\Modules\\SystemIntegrations\\": ""
+        }
+    }
+}

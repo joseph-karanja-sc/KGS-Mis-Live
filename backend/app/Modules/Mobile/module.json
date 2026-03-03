@@ -1,0 +1,14 @@
+{
+    "name": "Mobile",
+    "alias": "mobile",
+    "description": "",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "App\\Modules\\Mobile\\Providers\\MobileServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

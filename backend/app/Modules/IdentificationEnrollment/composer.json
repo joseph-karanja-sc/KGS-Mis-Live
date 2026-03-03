@@ -1,0 +1,25 @@
+{
+    "name": "nwidart/identificationenrollment",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "App\\Modules\\IdentificationEnrollment\\Providers\\IdentificationEnrollmentServiceProvider"
+            ],
+            "aliases": {
+                
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\Modules\\IdentificationEnrollment\\": ""
+        }
+    }
+}

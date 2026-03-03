@@ -1,0 +1,185 @@
+/* ─────────────────────────────────────────────
+   GLOBAL
+─────────────────────────────────────────────── */
+body {
+    font-family: "Inter", sans-serif;
+    margin: 0;
+    background: #f5f7fa;
+    color: #333;
+}
+
+.container {
+    padding: 20px;
+    max-width: 1800px;
+    margin: 0 auto;
+}
+
+
+/* ─────────────────────────────────────────────
+   HEADER
+─────────────────────────────────────────────── */
+.header {
+    background: #1b5e20;
+    padding: 15px 20px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.export-btn {
+    background: #2e7d32;
+    color: white;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.export-btn:hover {
+    background: #256628;
+}
+
+
+/* ─────────────────────────────────────────────
+   BREADCRUMBS
+─────────────────────────────────────────────── */
+#breadcrumbs {
+    margin: 15px 0;
+    font-size: 14px;
+}
+
+#breadcrumbs a {
+    color: #1b5e20;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+#breadcrumbs a:hover {
+    text-decoration: underline;
+}
+
+
+/* ─────────────────────────────────────────────
+   TABS
+─────────────────────────────────────────────── */
+#tabs {
+    margin-bottom: 20px;
+}
+
+#tabs button {
+    padding: 10px 18px;
+    margin-right: 8px;
+    font-size: 14px;
+    border: none;
+    background: #e0e0e0;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#tabs button:hover {
+    background: #d5d5d5;
+}
+
+#tabs .activeTab {
+    background: #1b5e20;
+    color: white;
+    font-weight: 600;
+}
+
+
+/* ─────────────────────────────────────────────
+   FILTER ROW
+─────────────────────────────────────────────── */
+.filters {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    padding: 20px;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.select-box,
+.search-box {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #fff;
+    font-size: 14px;
+}
+
+.search-box {
+    width: 220px;
+}
+
+
+/* ─────────────────────────────────────────────
+   TABLES
+─────────────────────────────────────────────── */
+table {
+    width: 100%;
+    background: white;
+    border-collapse: collapse;
+    margin-top: 0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+th {
+    background: #f0f0f0;
+    padding: 12px;
+    text-align: left;
+    font-size: 14px;
+    border-bottom: 1px solid #e0e0e0;
+    font-weight: 600;
+}
+
+td {
+    padding: 12px;
+    border-bottom: 1px solid #f1f1f1;
+    font-size: 14px;
+}
+
+tr:hover td {
+    background: #f7f7f7;
+    cursor: pointer;
+}
+
+
+/* ─────────────────────────────────────────────
+   EMPTY STATE
+─────────────────────────────────────────────── */
+.empty-state {
+    padding: 40px;
+    text-align: center;
+    color: #888;
+    font-size: 15px;
+}
+
+
+/* ─────────────────────────────────────────────
+   HEADINGS WITHIN APP CONTAINER
+─────────────────────────────────────────────── */
+#appContainer h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+
+/* ─────────────────────────────────────────────
+   BUTTONS (VIEW, FUTURE ACTIONS)
+─────────────────────────────────────────────── */
+button {
+    font-family: inherit;
+}
+
