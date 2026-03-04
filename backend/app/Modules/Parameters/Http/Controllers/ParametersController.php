@@ -3216,62 +3216,6 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
-    public function getBeneficiariesForMobileOldd(Request $req)
-    {
-        try {
-            $start=$req->input('start_at') ? $req->input('start_at') : 0;
-            $limit=$req->input('end_at') ? $req->input('end_at') : 10000;
-            $district_id=$req->input('district_id') ? $req->input('district_id') : null;
-            $beneficiary_status = 4;
-            $recommendation = 1;
-            $qry = DB::table('beneficiary_information as t1')
-                ->join('school_information as t2','t1.school_id', '=', 't2.id')
-                ->select('t1.id','t1.beneficiary_id','t1.household_id',
-                    't1.exam_school_id','t1.school_id','t1.cwac_id',
-                    't1.acc_id','t1.ward_id','t1.constituency_id',
-                    't1.district_id','t1.province_id','t1.cwac_txt',
-                    't1.district_txt',
-                    DB::Raw('t2.district_id as sch_district_id'),
-                    DB::Raw('decrypt(t1.first_name) as first_name'),
-                    DB::Raw('decrypt(t1.last_name) as last_name'),
-                    't1.dob','t1.verified_dob','t1.relation_to_hhh',
-                    't1.school_going','t1.qualified_sec_sch',
-                    't1.willing_to_return_sch','t1.highest_grade',
-                    't1.exam_grade','t1.current_school_grade','t1.exam_number')
-                ->where('t1.beneficiary_status', 4)
-                ->where('t1.is_checklist_verified', 0)
-                ->where('t1.verification_recommendation', 1);
-            $count_qry = DB::table('beneficiary_information as t1')
-                ->join('school_information as t2','t1.school_id', '=', 't2.id')
-                ->selectRaw('COUNT(t1.id) as id_count')
-                ->where('t1.beneficiary_status', 4)
-                ->where('t1.verification_recommendation', 1)
-                ->where('t1.is_checklist_verified', 0)
-            if($district_id) {
-                $qry->where('t2.district_id', $district_id); 
-                $total_active = $count_qry->where('t2.district_id', $district_id)->value('id_count');
-            } else {
-                $qry->where('t1.id', '>=', $start);
-                $qry->where('t1.id', '<=', $limit);
-                $total_active = 175619;
-            }
- 
-            $data = $qry->get();
-            $res = array(
-                'success' => true,
-                'message' => 'Records fetched successfully!!',
-                'total_active_in_table' => $total_active,
-                'results' => $data
-            );
-        } catch (\Exception $e) {
-            $res = array(
-                'success' => false,
-                'message' => $e->getMessage(),
-                'results' => ''
-            );
-        }
-        return response()->json($res);
-    }
     public function getBeneficiariesForMobile(Request $req)
     {
         try {
