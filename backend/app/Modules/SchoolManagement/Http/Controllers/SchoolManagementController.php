@@ -670,12 +670,12 @@ class SchoolManagementController extends BaseController
             }
 
             // Get total beneficiaries to be transferred
-            $childBeneficiaryCount = DB::table('beneficiary_enrollments')
+            $childBeneficiaryCount = DB::table('beneficiary_information')
                 ->whereIn('school_id', $childSchoolIds)
                 ->count();
 
             // Update all beneficiary enrollments from child schools to mother school
-            DB::table('beneficiary_enrollments')
+            DB::table('beneficiary_information')
                 ->whereIn('school_id', $childSchoolIds)
                 ->update([
                     'school_id' => $motherSchoolId,
