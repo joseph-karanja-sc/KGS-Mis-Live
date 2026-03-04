@@ -3245,7 +3245,8 @@ class ParametersController extends BaseController
                 ->join('school_information as t2','t1.school_id', '=', 't2.id')
                 ->selectRaw('COUNT(t1.id) as id_count')
                 ->where('t1.beneficiary_status', 4)
-                ->where('t1.verification_recommendation', 1);
+                ->where('t1.verification_recommendation', 1)
+                ->where('t1.is_checklist_verified', 0)
             if($district_id) {
                 $qry->where('t2.district_id', $district_id); 
                 $total_active = $count_qry->where('t2.district_id', $district_id)->value('id_count');
@@ -4806,25 +4807,43 @@ class ParametersController extends BaseController
     // temporary function to mark girls as verified
     public function markChecklistVerified()
     {
-        DB::beginTransaction();
-
         try {
 
             $date = '2026-02-19 00:00:00';
+            $batchSize = 100;
+            $totalUpdated = 0;
 
-            $affectedRows = DB::update("
-                UPDATE beneficiary_information t1
-                INNER JOIN beneficiary_payresponses_staging s1
-                    ON t1.beneficiary_id = s1.beneficiary_id
-                SET t1.is_checklist_verified = 1
-                WHERE s1.DATETIME >= ?
-            ", [$date]);
+            do {
 
-            DB::commit();
+                // Fetch batch of beneficiary_ids
+                $ids = DB::table('beneficiary_payresponses_staging')
+                    ->where('DATETIME', '>=', $date)
+                    ->limit($batchSize)
+                    ->pluck('beneficiary_id')
+                    ->toArray();
+
+                if (empty($ids)) {
+                    break;
+                }
+
+                DB::beginTransaction();
+
+                $affected = DB::table('beneficiary_information')
+                    ->whereIn('beneficiary_id', $ids)
+                    ->update([
+                        'is_checklist_verified' => 1
+                    ]);
+
+                DB::commit();
+
+                $totalUpdated += $affected;
+
+            } while (count($ids) == $batchSize);
+
 
             return response()->json([
                 'message' => 'Checklist verification updated successfully',
-                'updated_count' => $affectedRows
+                'updated_count' => $totalUpdated
             ]);
 
         } catch (\Exception $e) {
