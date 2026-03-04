@@ -23,3 +23,4 @@ Route::get('mobile-params/get-cwacs-enrollment-mobile', [ParametersController::c
 Route::get('mobile-params/get-statistics-enrollment-mobile', [ParametersController::class, 'getEnrollmentStatisticsMobile']);
 Route::post('mobile-params/process-transfers', [ParametersController::class, 'processTransfersEnterprise']);
 Route::post('mobile-params/mark-verified', [ParametersController::class, 'markChecklistVerified']);
+Route::post('mobile-params/reset-verified', [ParametersController::class, 'resetChecklistVerification']);

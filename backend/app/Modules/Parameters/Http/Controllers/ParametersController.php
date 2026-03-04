@@ -4838,6 +4838,41 @@ class ParametersController extends BaseController
         }
     }
 
- 
- 
+    //temporary func to reset is_checklist_verified to 0 for transfers
+    public function resetChecklistVerification()
+    {
+        try {
+
+            $updatedCount = 0;
+
+            DB::table('transfers_audit')
+                ->select('beneficiary_id')
+                ->orderBy('beneficiary_id')
+                ->chunk(100, function ($records) use (&$updatedCount) {
+
+                    $ids = $records->pluck('beneficiary_id')->toArray();
+
+                    $affected = DB::table('beneficiary_information')
+                        ->whereIn('beneficiary_id', $ids)
+                        ->where('is_checklist_verified', 1)
+                        ->update([
+                            'is_checklist_verified' => 0
+                        ]);
+
+                    $updatedCount += $affected;
+                });
+
+            return response()->json([
+                'message' => 'Checklist verification reset successfully',
+                'updated_records' => $updatedCount
+            ]);
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'message' => 'Update failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
