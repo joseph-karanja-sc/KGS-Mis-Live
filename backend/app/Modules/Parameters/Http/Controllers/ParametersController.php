@@ -3170,7 +3170,8 @@ class ParametersController extends BaseController
                 adm_acc.sort_code as administration_fees_sort_code"));
  
             $qry->where('t1.id', '>=', $start)
-                        ->where('t1.id', '<=', $limit);
+                        ->where('t1.id', '<=', $limit)
+                        ->where('t1.isDeleted', '=', 0);
  
             if (isset($district_id) && $district_id != '') {
                 $qry = $qry->where('t1.district_id', $district_id);
