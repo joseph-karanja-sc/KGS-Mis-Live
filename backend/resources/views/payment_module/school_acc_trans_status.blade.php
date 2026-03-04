@@ -534,7 +534,7 @@ function renderSchoolsTable() {
 }
 
 /* =========================================================
-   BENEFICIARIES TABLE jose
+   BENEFICIARIES TABLE
 ========================================================= */
 function openBeneficiariesTab(i) {
     const school = currentSchoolsView[i];
