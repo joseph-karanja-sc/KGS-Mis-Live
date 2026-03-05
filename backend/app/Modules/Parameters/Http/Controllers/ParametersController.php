@@ -4604,7 +4604,7 @@ class ParametersController extends BaseController
                     COALESCE(t9.latitude,t9.new_latitude) as latitude,
                     COALESCE(t9.longitude,t9.new_longitude) as longitude,
                     t9.education_grant_sort_code as eduction_grant_sort_code,t9.running_agency_id,
-                    COALESCE(t9.bank_id, sbi.bank_id) as bank_id,t9.account_no,t9.branch_name,t9.sort_code,
+                    sbi.bank_id, sbi.branch_name, sbi.account_no, sbi.sort_code,
                     t9.facility_type,t9.cwac_contact_person_phone_no,t9.additional_remarks,
                     t9.submitted_by as checklistissued_by,COALESCE(t9.bank_name, bd.name) as bank_name,t9.guidance_counselling_teacher_phone_no,
                     t9.guidance_counselling_teacher, t9.submitted_by as added_by,t9.batch_id,
