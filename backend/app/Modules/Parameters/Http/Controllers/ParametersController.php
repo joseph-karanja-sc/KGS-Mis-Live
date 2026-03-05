@@ -2888,7 +2888,7 @@ class ParametersController extends BaseController
     }
 
     //added base64 conversion to file path
-    public function syncMobileInfo(Request $req)
+    public function syncMobileInfo(Request $req) // Fixes lock issue
     {
         Log::info("------------------------------------------------------");
 
@@ -2899,6 +2899,7 @@ class ParametersController extends BaseController
 
         $insertedCount = 0;
         $updatedCount = 0;
+        $syncCount = 0;
 
         try {
 
@@ -2916,12 +2917,8 @@ class ParametersController extends BaseController
 
                     $meta_info = $t;
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | PROCESS ENROLLMENTS
-                    |--------------------------------------------------------------------------
-                    */
 
+                    // PROCESS ENROLLMENTS
                     if ($enrollment_info_array && is_array($enrollment_info_array)) {
 
                         foreach ($enrollment_info_array as $enrollIndex => $enrollment_info) {
@@ -2929,61 +2926,56 @@ class ParametersController extends BaseController
                             try {
 
                                 if (!is_array($enrollment_info) || empty($enrollment_info)) {
+                                    Log::warning("Skipping invalid enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
                                     continue;
                                 }
 
                                 $beneficiary_id = $enrollment_info['beneficiary_id'] ?? null;
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | Convert Base64 Images → File Paths
-                                |--------------------------------------------------------------------------
-                                */
-
-                                if ($beneficiary_id) {
-
-                                    if (!empty($enrollment_info['beneficiary_image']) 
-                                        && strlen($enrollment_info['beneficiary_image']) > 200) {
-
-                                        $enrollment_info['beneficiary_image'] =
-                                            $this->saveBase64Image(
-                                                $enrollment_info['beneficiary_image'],
-                                                'beneficiaryimages',
-                                                $beneficiary_id
-                                            );
-                                    }
-
-                                    if (!empty($enrollment_info['signature']) 
-                                        && strlen($enrollment_info['signature']) > 200) {
-
-                                        $enrollment_info['signature'] =
-                                            $this->saveBase64Image(
-                                                $enrollment_info['signature'],
-                                                'signatureimages',
-                                                $beneficiary_id
-                                            );
-                                    }
-
-                                    if (!empty($enrollment_info['disclaimer_form']) 
-                                        && strlen($enrollment_info['disclaimer_form']) > 200) {
-
-                                        $enrollment_info['disclaimer_form'] =
-                                            $this->saveBase64Image(
-                                                $enrollment_info['disclaimer_form'],
-                                                'disclaimerforms',
-                                                $beneficiary_id
-                                            );
-                                    }
-
-                                    $enrollment_info['images_converted'] = 1;
+                                if (!$beneficiary_id) {
+                                    Log::warning("Missing beneficiary_id at school index {$schoolIndex}, enrollment index {$enrollIndex}");
+                                    continue;
                                 }
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | Prepare Data
-                                |--------------------------------------------------------------------------
-                                */
 
+                                // Convert Base64 Images → File Paths
+                                if (!empty($enrollment_info['beneficiary_image']) &&
+                                    strlen($enrollment_info['beneficiary_image']) > 200) {
+
+                                    $enrollment_info['beneficiary_image'] =
+                                        $this->saveBase64Image(
+                                            $enrollment_info['beneficiary_image'],
+                                            'beneficiaryimages',
+                                            $beneficiary_id
+                                        );
+                                }
+
+                                if (!empty($enrollment_info['signature']) &&
+                                    strlen($enrollment_info['signature']) > 200) {
+
+                                    $enrollment_info['signature'] =
+                                        $this->saveBase64Image(
+                                            $enrollment_info['signature'],
+                                            'signatureimages',
+                                            $beneficiary_id
+                                        );
+                                }
+
+                                if (!empty($enrollment_info['disclaimer_form']) &&
+                                    strlen($enrollment_info['disclaimer_form']) > 200) {
+
+                                    $enrollment_info['disclaimer_form'] =
+                                        $this->saveBase64Image(
+                                            $enrollment_info['disclaimer_form'],
+                                            'disclaimerforms',
+                                            $beneficiary_id
+                                        );
+                                }
+
+                                $enrollment_info['images_converted'] = 1;
+
+
+                                // Prepare enrollment data with required fields
                                 $enrollment_data = array_merge($enrollment_info, [
 
                                     'school_id' => $school_id,
@@ -2993,91 +2985,91 @@ class ParametersController extends BaseController
                                     'batch_no' => $enrollment_info['batch_no'] ?? null,
                                     'beneficiary_schoolstatus_id' => $enrollment_info['beneficiary_schoolstatus_id'] ?? 0,
 
-                                    'created_at' => now(),
                                     'updated_at' => now(),
-
-                                    'created_by' => $sender_id,
                                     'updated_by' => $sender_id,
 
                                     'prevrecord_id' => $enrollment_info['prevrecord_id'] ?? 0,
-
                                     'images_converted' => $enrollment_info['images_converted'] ?? 0,
 
-                                    'unavailable_remark' => $enrollment_info['unavailable_remark'] ?? '0',
+                                    'created_at' => now(),
+                                    'created_by' => $sender_id,
                                 ]);
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | Build UPSERT Query
-                                |--------------------------------------------------------------------------
-                                */
 
+                                // Build UPSERT Query
                                 $columns = array_keys($enrollment_data);
-                                $values = array_values($enrollment_data);
+                                $values  = array_values($enrollment_data);
 
                                 $placeholders = array_fill(0, count($values), '?');
 
+
+                                // Build column list safely
+                                $columnList = implode(',', array_map(function ($col) {
+                                    return "`{$col}`";
+                                }, $columns));
+
+
+                                // Build update clauses
                                 $updateClauses = [];
 
                                 foreach ($columns as $col) {
 
                                     if ($col !== 'id' && $col !== 'beneficiary_id' && $col !== 'school_id') {
-
                                         $updateClauses[] = "`{$col}` = VALUES(`{$col}`)";
                                     }
                                 }
 
-                                if (empty($updateClauses)) {
-                                    $updateClauses[] = "updated_at = VALUES(updated_at)";
-                                }
 
                                 $sql = "INSERT INTO beneficiary_payresponses_staging (" .
-                                    implode(',', array_map(fn($c) => "`{$c}`", $columns)) .
+                                    $columnList .
                                     ") VALUES (" .
                                     implode(',', $placeholders) .
                                     ") ON DUPLICATE KEY UPDATE " .
                                     implode(',', $updateClauses);
 
+
+                                // Execute UPSERT
                                 $rowCount = DB::affectingStatement($sql, $values);
 
+
+                                // Returns 1 = Insert, 2 = Update, 0 = No change
                                 if ($rowCount == 1) {
 
                                     $insertedCount++;
+                                    $syncCount++;
+
+                                    Log::info("Inserted enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
+
+                                } elseif ($rowCount == 2) {
+
+                                    $updatedCount++;
+                                    $syncCount++;
+
+                                    Log::info("Updated enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
 
                                 } else {
 
-                                    $updatedCount++;
+                                    Log::warning("No changes for enrollment of beneficiary: {$beneficiary_id}, school: {$school_id}");
                                 }
 
                             } catch (\Exception $e) {
 
-                                Log::error("Enrollment error for beneficiary: " .
-                                    ($enrollment_info['beneficiary_id'] ?? 'unknown'));
-
-                                Log::error($e->getMessage());
+                                Log::error("Error processing enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
+                                Log::error("Beneficiary ID: " . ($enrollment_info['beneficiary_id'] ?? 'unknown'));
+                                Log::error("Error: " . $e->getMessage());
                             }
                         }
                     }
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | PROCESS FEES
-                    |--------------------------------------------------------------------------
-                    */
 
+                    // PROCESS FEES
                     if ($fees_info_array && is_array($fees_info_array)) {
 
                         try {
 
-                            $beneficiaryIds = [];
-
-                            foreach ($enrollment_info_array ?? [] as $enrollment) {
-
-                                if (!empty($enrollment['beneficiary_id'])) {
-
-                                    $beneficiaryIds[] = $enrollment['beneficiary_id'];
-                                }
-                            }
+                            $beneficiaryIds = array_filter(array_map(function ($enrollment) {
+                                return $enrollment['beneficiary_id'] ?? null;
+                            }, $enrollment_info_array ?? []));
 
                             if (!empty($beneficiaryIds)) {
 
@@ -3087,29 +3079,30 @@ class ParametersController extends BaseController
                                     ->delete();
                             }
 
-                            foreach ($fees_info_array as $fee_info) {
+                            foreach ($fees_info_array as $feeIndex => $fee_info) {
+
+                                if (!is_array($fee_info) || empty($fee_info)) {
+                                    Log::warning("Skipping invalid fee at school index {$schoolIndex}, fee index {$feeIndex}");
+                                    continue;
+                                }
 
                                 unset($fee_info['id']);
 
-                                if (!empty($fee_info)) {
-
+                                if (count($fee_info) > 0) {
                                     DB::table('beneficiary_fees_staging')->insert($fee_info);
                                 }
                             }
 
+                            Log::info("Processed fees for school_id: {$school_id}");
+
                         } catch (\Exception $e) {
 
-                            Log::error("Fee processing error for school: {$school_id}");
-                            Log::error($e->getMessage());
+                            Log::error("Error processing fees for school_id {$school_id}: " . $e->getMessage());
                         }
                     }
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | PROCESS META INFO
-                    |--------------------------------------------------------------------------
-                    */
 
+                    // PROCESS META INFO
                     if ($meta_info && is_array($meta_info) && count($meta_info) > 0) {
 
                         try {
@@ -3124,35 +3117,55 @@ class ParametersController extends BaseController
 
                         } catch (\Exception $e) {
 
-                            Log::error("Meta info error for school: {$school_id}");
-                            Log::error($e->getMessage());
+                            Log::error("Error processing meta info for school_id {$school_id}: " . $e->getMessage());
                         }
                     }
                 }
 
-                $res = [
 
+                // Build response message
+                $messageParts = [];
+
+                if ($insertedCount > 0) {
+                    $messageParts[] = "{$insertedCount} inserted";
+                }
+
+                if ($updatedCount > 0) {
+                    $messageParts[] = "{$updatedCount} updated";
+                }
+
+                if ($syncCount > 0) {
+                    $messageParts[] = "{$syncCount} total synced";
+                }
+
+                $res = [
                     'success' => true,
-                    'message' => "Sync complete: {$insertedCount} inserted, {$updatedCount} updated"
+                    'message' => count($messageParts) > 0
+                        ? 'Sync complete: ' . implode(', ', $messageParts)
+                        : 'Sync Info Received (no changes)',
+                    'syncCount' => $syncCount
                 ];
 
             } else {
 
                 $res = [
-
                     'success' => false,
-                    'message' => 'Empty Sync Request'
+                    'message' => 'Empty Sync Request',
+                    'syncCount' => $syncCount
                 ];
             }
 
+            Log::info("Process complete: " . json_encode($res));
+
         } catch (\Exception $e) {
 
-            Log::error($e->getMessage());
+            Log::error("Error occurred: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString());
 
             $res = [
-
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
+                'syncCount' => $syncCount
             ];
         }
 
