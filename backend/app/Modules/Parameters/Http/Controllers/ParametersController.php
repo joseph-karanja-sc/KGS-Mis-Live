@@ -2859,13 +2859,12 @@ class ParametersController extends BaseController
     public function syncMobileInfo(Request $req)
     {
         Log::info("------------------------------------------------------");
-        // $fileName = 'syncs/sync_' . time() . '_' . ($req->input('user_id') ?? 'unknown') . '.json';
-        // Storage::disk('local')->put($fileName, json_encode($req->all(), JSON_PRETTY_PRINT));
-
         $sender_id = $req->input('user_id');
         $results = $req->input('results');
         Log::info("syncMobileInfo called - Sender ID: " . $sender_id);
-        $skippedBeneficiaries = [];
+        
+        $insertedCount = 0;
+        $updatedCount = 0;
         
         try {
             if ($results && is_array($results)) {
@@ -2879,7 +2878,7 @@ class ParametersController extends BaseController
                     unset($t['fees']);
                     $meta_info = $t;
                 
-                    // Process enrollment info - it's an array of enrollment records
+                    // Process enrollment info - INSERT ON DUPLICATE KEY UPDATE
                     if ($enrollment_info_array && is_array($enrollment_info_array)) {
                         foreach ($enrollment_info_array as $enrollIndex => $enrollment_info) {
                             try {
@@ -2888,47 +2887,75 @@ class ParametersController extends BaseController
                                     continue;
                                 }
                                 
-                                // Check if this specific beneficiary is already synced and skip
                                 $beneficiary_id = $enrollment_info['beneficiary_id'] ?? null;
-                                if ($beneficiary_id && DB::table('beneficiary_payresponses_staging')
-                                    ->where('beneficiary_id', $beneficiary_id)
-                                    ->where('school_id', $school_id)
-                                    ->exists()) {
-                                    $skippedBeneficiaries[] = $beneficiary_id;
-                                    Log::info("Skipping already synced beneficiary: {$beneficiary_id} for school: {$school_id}");
+                                if (!$beneficiary_id) {
+                                    Log::warning("Missing beneficiary_id at school index {$schoolIndex}, enrollment index {$enrollIndex}");
                                     continue;
                                 }
                                 
-                                // Add missing required fields
-                                $enrollment_info = array_merge($enrollment_info, [
+                                // Prepare enrollment data with all required fields
+                                $enrollment_data = array_merge($enrollment_info, [
+                                    'school_id' => $school_id,
                                     'in_workflow' => $enrollment_info['in_workflow'] ?? 0,
                                     'batch_id' => $enrollment_info['batch_id'] ?? 0,
                                     'batch_no' => $enrollment_info['batch_no'] ?? null,
                                     'beneficiary_schoolstatus_id' => $enrollment_info['beneficiary_schoolstatus_id'] ?? 0,
-                                    'created_at' => now(),
                                     'updated_at' => now(),
-                                    'created_by' => $sender_id,
                                     'updated_by' => $sender_id,
                                     'prevrecord_id' => $enrollment_info['prevrecord_id'] ?? 0,
                                     'images_converted' => $enrollment_info['images_converted'] ?? 0,
-                                    'unavailable_remark' => $enrollment_info['unavailable_remark'] ?? '0', // Fix null remarks
+                                    'created_at' => now(),
+                                    'created_by' => $sender_id,
                                 ]);
-                            
-                                DB::table('beneficiary_payresponses_staging')->insert($enrollment_info);
-                                Log::info("Inserted enrollment for beneficiary: " . ($enrollment_info['beneficiary_id'] ?? 'unknown'));
+                                
+                                // Build columns and values
+                                $columns = array_keys($enrollment_data);
+                                $values = array_values($enrollment_data);
+                                
+                                // Build placeholders
+                                $placeholders = array_fill(0, count($values), '?');
+                                
+                                // Build ON DUPLICATE KEY UPDATE clause (exclude primary key columns)
+                                $updateClauses = [];
+                                foreach ($columns as $col) {
+                                    // Skip auto-increment id and key columns from update
+                                    if ($col !== 'id' && $col !== 'beneficiary_id' && $col !== 'school_id') {
+                                        $updateClauses[] = "`{$col}` = VALUES(`{$col}`)";
+                                    }
+                                }
+                                
+                                $sql = "INSERT INTO `beneficiary_payresponses_staging` (" . 
+                                    implode(', ', array_map(function($col) { return "`{$col}`"; }, $columns)) . 
+                                    ") VALUES (" . implode(', ', $placeholders) . 
+                                    ") ON DUPLICATE KEY UPDATE " . 
+                                    implode(', ', $updateClauses);
+                                
+                                $result = DB::statement($sql, $values);
+                                
+                                // Check if insert or update occurred using ROW_COUNT()
+                                // ROW_COUNT() returns 1 for insert, 2 for update (in MySQL)
+                                $rowCount = DB::select('SELECT ROW_COUNT() as row_count')[0]->row_count;
+                                
+                                if ($rowCount == 1) {
+                                    $insertedCount++;
+                                    Log::info("Inserted enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
+                                } else {
+                                    $updatedCount++;
+                                    Log::info("Updated enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
+                                }
                                 
                             } catch (\Exception $e) {
-                                Log::error("Error inserting enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
+                                Log::error("Error processing enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
                                 Log::error("Beneficiary ID: " . ($enrollment_info['beneficiary_id'] ?? 'unknown'));
                                 Log::error("Error: " . $e->getMessage());
                             }
                         }
                     }
                 
-                    // Process fees info - it's an array of fee records
+                    // Process fees info - DELETE existing then INSERT new
                     if ($fees_info_array && is_array($fees_info_array)) {
                         try {
-                            // Only delete fees for beneficiaries that are being synced in this request
+                            // Get beneficiary IDs from enrollment data
                             $beneficiaryIds = array_filter(array_map(function($enrollment) {
                                 return $enrollment['beneficiary_id'] ?? null;
                             }, $enrollment_info_array ?? []));
@@ -2953,39 +2980,68 @@ class ParametersController extends BaseController
                                 }
                             }
                             
-                            Log::info("Inserted fees for school_id: {$school_id}");
+                            Log::info("Processed fees for school_id: {$school_id}");
                             
                         } catch (\Exception $e) {
-                            Log::error("Error inserting fees for school_id {$school_id}: " . $e->getMessage());
+                            Log::error("Error processing fees for school_id {$school_id}: " . $e->getMessage());
                         }
                     }
                 
-                    // Process meta info
+                    // Process meta info - INSERT ON DUPLICATE KEY UPDATE
                     if ($meta_info && is_array($meta_info) && count($meta_info) > 0) {
                         try {
-                            // Check if meta info already exists for this school
-                            $metaExists = DB::table('beneficiary_metainfo_staging')
-                                ->where('school_id', $school_id)
-                                ->exists();
+                            // Ensure school_id is in meta_info
+                            $meta_info['school_id'] = $school_id;
                             
-                            if (!$metaExists) {
-                                DB::table('beneficiary_metainfo_staging')->insert($meta_info);
+                            $columns = array_keys($meta_info);
+                            $values = array_values($meta_info);
+                            $placeholders = array_fill(0, count($values), '?');
+                            
+                            // Build ON DUPLICATE KEY UPDATE clause
+                            $updateClauses = [];
+                            foreach ($columns as $col) {
+                                if ($col !== 'id' && $col !== 'school_id') {
+                                    $updateClauses[] = "`{$col}` = VALUES(`{$col}`)";
+                                }
+                            }
+                            
+                            $sql = "INSERT INTO `beneficiary_metainfo_staging` (" . 
+                                implode(', ', array_map(function($col) { return "`{$col}`"; }, $columns)) . 
+                                ") VALUES (" . implode(', ', $placeholders) . 
+                                ") ON DUPLICATE KEY UPDATE " . 
+                                implode(', ', $updateClauses);
+                            
+                            $result = DB::statement($sql, $values);
+                            
+                            // Check if insert or update occurred
+                            $rowCount = DB::select('SELECT ROW_COUNT() as row_count')[0]->row_count;
+                            
+                            if ($rowCount == 1) {
                                 Log::info("Inserted meta info for school_id: {$school_id}");
                             } else {
-                                Log::info("Meta info already exists for school_id: {$school_id}, skipping");
+                                Log::info("Updated meta info for school_id: {$school_id}");
                             }
                             
                         } catch (\Exception $e) {
-                            Log::error("Error inserting meta info for school_id {$school_id}: " . $e->getMessage());
+                            Log::error("Error processing meta info for school_id {$school_id}: " . $e->getMessage());
                         }
                     }
                 }
             
+                // Build response message
+                $messageParts = [];
+                if ($insertedCount > 0) {
+                    $messageParts[] = "{$insertedCount} inserted";
+                }
+                if ($updatedCount > 0) {
+                    $messageParts[] = "{$updatedCount} updated";
+                }
+                
                 $res = [
                     'success' => true,
-                    'message' => count($skippedBeneficiaries) > 0 
-                        ? 'Sync successful (Some beneficiaries were already synced and skipped): '.count($skippedBeneficiaries) 
-                        : 'Sync Info Received'
+                    'message' => count($messageParts) > 0 
+                        ? 'Sync complete: ' . implode(', ', $messageParts)
+                        : 'Sync Info Received (no changes)'
                 ];
             } else {
                 $res = [
