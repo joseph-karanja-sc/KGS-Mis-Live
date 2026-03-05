@@ -2865,6 +2865,7 @@ class ParametersController extends BaseController
         
         $insertedCount = 0;
         $updatedCount = 0;
+        $skippedMetaCount = 0;
         
         try {
             if ($results && is_array($results)) {
@@ -2878,7 +2879,7 @@ class ParametersController extends BaseController
                     unset($t['fees']);
                     $meta_info = $t;
                 
-                    // Process enrollment info - INSERT ON DUPLICATE KEY UPDATE
+                    // Process enrollment info - UPDATE OR INSERT
                     if ($enrollment_info_array && is_array($enrollment_info_array)) {
                         foreach ($enrollment_info_array as $enrollIndex => $enrollment_info) {
                             try {
@@ -2893,9 +2894,14 @@ class ParametersController extends BaseController
                                     continue;
                                 }
                                 
-                                // Prepare enrollment data with all required fields
+                                // Check if record exists to determine if it's insert or update
+                                $exists = DB::table('beneficiary_payresponses_staging')
+                                    ->where('beneficiary_id', $beneficiary_id)
+                                    ->where('school_id', $school_id)
+                                    ->exists();
+                                
+                                // Add missing required fields
                                 $enrollment_data = array_merge($enrollment_info, [
-                                    'school_id' => $school_id,
                                     'in_workflow' => $enrollment_info['in_workflow'] ?? 0,
                                     'batch_id' => $enrollment_info['batch_id'] ?? 0,
                                     'batch_no' => $enrollment_info['batch_no'] ?? null,
@@ -2904,44 +2910,23 @@ class ParametersController extends BaseController
                                     'updated_by' => $sender_id,
                                     'prevrecord_id' => $enrollment_info['prevrecord_id'] ?? 0,
                                     'images_converted' => $enrollment_info['images_converted'] ?? 0,
-                                    'created_at' => now(),
-                                    'created_by' => $sender_id,
                                 ]);
                                 
-                                // Build columns and values
-                                $columns = array_keys($enrollment_data);
-                                $values = array_values($enrollment_data);
-                                
-                                // Build placeholders
-                                $placeholders = array_fill(0, count($values), '?');
-                                
-                                // Build ON DUPLICATE KEY UPDATE clause (exclude primary key columns)
-                                $updateClauses = [];
-                                foreach ($columns as $col) {
-                                    // Skip auto-increment id and key columns from update
-                                    if ($col !== 'id' && $col !== 'beneficiary_id' && $col !== 'school_id') {
-                                        $updateClauses[] = "`{$col}` = VALUES(`{$col}`)";
-                                    }
-                                }
-                                
-                                $sql = "INSERT INTO `beneficiary_payresponses_staging` (" . 
-                                    implode(', ', array_map(function($col) { return "`{$col}`"; }, $columns)) . 
-                                    ") VALUES (" . implode(', ', $placeholders) . 
-                                    ") ON DUPLICATE KEY UPDATE " . 
-                                    implode(', ', $updateClauses);
-                                
-                                $result = DB::statement($sql, $values);
-                                
-                                // Check if insert or update occurred using ROW_COUNT()
-                                // ROW_COUNT() returns 1 for insert, 2 for update (in MySQL)
-                                $rowCount = DB::select('SELECT ROW_COUNT() as row_count')[0]->row_count;
-                                
-                                if ($rowCount == 1) {
-                                    $insertedCount++;
-                                    Log::info("Inserted enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
-                                } else {
+                                if ($exists) {
+                                    // UPDATE existing record
+                                    DB::table('beneficiary_payresponses_staging')
+                                        ->where('beneficiary_id', $beneficiary_id)
+                                        ->where('school_id', $school_id)
+                                        ->update($enrollment_data);
                                     $updatedCount++;
                                     Log::info("Updated enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
+                                } else {
+                                    // INSERT new record
+                                    $enrollment_data['created_at'] = now();
+                                    $enrollment_data['created_by'] = $sender_id;
+                                    DB::table('beneficiary_payresponses_staging')->insert($enrollment_data);
+                                    $insertedCount++;
+                                    Log::info("Inserted enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
                                 }
                                 
                             } catch (\Exception $e) {
@@ -2987,39 +2972,23 @@ class ParametersController extends BaseController
                         }
                     }
                 
-                    // Process meta info - INSERT ON DUPLICATE KEY UPDATE
+                    // Process meta info - UPDATE OR INSERT
                     if ($meta_info && is_array($meta_info) && count($meta_info) > 0) {
                         try {
-                            // Ensure school_id is in meta_info
-                            $meta_info['school_id'] = $school_id;
+                            $metaExists = DB::table('beneficiary_metainfo_staging')
+                                ->where('school_id', $school_id)
+                                ->first();
                             
-                            $columns = array_keys($meta_info);
-                            $values = array_values($meta_info);
-                            $placeholders = array_fill(0, count($values), '?');
-                            
-                            // Build ON DUPLICATE KEY UPDATE clause
-                            $updateClauses = [];
-                            foreach ($columns as $col) {
-                                if ($col !== 'id' && $col !== 'school_id') {
-                                    $updateClauses[] = "`{$col}` = VALUES(`{$col}`)";
-                                }
-                            }
-                            
-                            $sql = "INSERT INTO `beneficiary_metainfo_staging` (" . 
-                                implode(', ', array_map(function($col) { return "`{$col}`"; }, $columns)) . 
-                                ") VALUES (" . implode(', ', $placeholders) . 
-                                ") ON DUPLICATE KEY UPDATE " . 
-                                implode(', ', $updateClauses);
-                            
-                            $result = DB::statement($sql, $values);
-                            
-                            // Check if insert or update occurred
-                            $rowCount = DB::select('SELECT ROW_COUNT() as row_count')[0]->row_count;
-                            
-                            if ($rowCount == 1) {
-                                Log::info("Inserted meta info for school_id: {$school_id}");
-                            } else {
+                            if ($metaExists) {
+                                // UPDATE existing meta info
+                                DB::table('beneficiary_metainfo_staging')
+                                    ->where('school_id', $school_id)
+                                    ->update($meta_info);
                                 Log::info("Updated meta info for school_id: {$school_id}");
+                            } else {
+                                // INSERT new meta info
+                                DB::table('beneficiary_metainfo_staging')->insert($meta_info);
+                                Log::info("Inserted meta info for school_id: {$school_id}");
                             }
                             
                         } catch (\Exception $e) {
@@ -4660,7 +4629,7 @@ class ParametersController extends BaseController
                     COALESCE(t9.latitude,t9.new_latitude) as latitude,
                     COALESCE(t9.longitude,t9.new_longitude) as longitude,
                     t9.education_grant_sort_code as eduction_grant_sort_code,t9.running_agency_id,
-                    sbi.bank_id, sbi.branch_name, sbi.account_no, sbi.sort_code,
+                    sbi.bank_id, sbi.branch_name, decrypt(sbi.account_no) as account_no, sbi.sort_code,
                     t9.facility_type,t9.cwac_contact_person_phone_no,t9.additional_remarks,
                     t9.submitted_by as checklistissued_by,COALESCE(t9.bank_name, bd.name) as bank_name,t9.guidance_counselling_teacher_phone_no,
                     t9.guidance_counselling_teacher, t9.submitted_by as added_by,t9.batch_id,
