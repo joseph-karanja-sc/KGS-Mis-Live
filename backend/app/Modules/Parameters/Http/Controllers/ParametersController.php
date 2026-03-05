@@ -3242,7 +3242,7 @@ class ParametersController extends BaseController
                 ->where('t1.beneficiary_status', 4)
                 ->where('t1.is_checklist_verified', 0)
                 ->where('t1.enrollment_status', 1)
-                ->where('t3.id', null) // beneficiaries not yet synced to staging
+                // ->where('t3.id', null) // beneficiaries not yet synced to staging
                 ->where('t1.verification_recommendation', 1);
             $count_qry = DB::table('beneficiary_information as t1')
                 ->join('school_information as t2','t1.school_id', '=', 't2.id')
@@ -3251,7 +3251,7 @@ class ParametersController extends BaseController
                 ->where('t1.beneficiary_status', 4)
                 ->where('t1.is_checklist_verified', 0)
                 ->where('t1.enrollment_status', 1)
-                ->where('t3.id', null) // beneficiaries not yet synced to staging
+                // ->where('t3.id', null) // beneficiaries not yet synced to staging
                 ->where('t1.verification_recommendation', 1);
             if($district_id) {
                 $qry->where('t2.district_id', $district_id); 
@@ -4754,7 +4754,7 @@ class ParametersController extends BaseController
         try {
 
             $date = '2026-02-19 00:00:00';
-            $batchSize = 100;
+            $batchSize = 1000;
             $totalUpdated = 0;
 
             do {
