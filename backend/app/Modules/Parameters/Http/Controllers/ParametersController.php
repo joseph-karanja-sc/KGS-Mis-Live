@@ -2856,6 +2856,36 @@ class ParametersController extends BaseController
     //     return response()->json($res);
 
     // }
+
+    //private function to convert base 64 images to file path
+    private function saveBase64Image($base64, $folder, $beneficiaryId)
+    {
+        if (!$base64) {
+            return null;
+        }
+
+        $year  = date('y');
+        $month = date('m');
+
+        $relativeDir = "img/{$folder}/img{$beneficiaryId}/{$year}/{$month}";
+        $fullDir = public_path($relativeDir);
+
+        if (!file_exists($fullDir)) {
+            mkdir($fullDir, 0777, true);
+        }
+
+        $fileName = uniqid() . ".jpg";
+
+        $base64 = preg_replace('#^data:image/\w+;base64,#i', '', $base64);
+        $base64 = str_replace(' ', '+', $base64);
+
+        file_put_contents(
+            $fullDir . '/' . $fileName,
+            base64_decode($base64)
+        );
+
+        return $relativeDir . '/' . $fileName;
+    }
     public function syncMobileInfo(Request $req)
     {
         Log::info("------------------------------------------------------");
@@ -2890,6 +2920,37 @@ class ParametersController extends BaseController
                                 
                                 // Check if this specific beneficiary is already synced and skip
                                 $beneficiary_id = $enrollment_info['beneficiary_id'] ?? null;
+
+                                //this if statement saves file path instead of base64
+                                if ($beneficiary_id) {
+
+                                    if (!empty($enrollment_info['beneficiary_image'])) {
+                                        $enrollment_info['beneficiary_image'] = $this->saveBase64Image(
+                                            $enrollment_info['beneficiary_image'],
+                                            'beneficiaryimages',
+                                            $beneficiary_id
+                                        );
+                                    }
+
+                                    if (!empty($enrollment_info['signature'])) {
+                                        $enrollment_info['signature'] = $this->saveBase64Image(
+                                            $enrollment_info['signature'],
+                                            'signatureimages',
+                                            $beneficiary_id
+                                        );
+                                    }
+
+                                    if (!empty($enrollment_info['disclaimer_form'])) {
+                                        $enrollment_info['disclaimer_form'] = $this->saveBase64Image(
+                                            $enrollment_info['disclaimer_form'],
+                                            'disclaimerforms',
+                                            $beneficiary_id
+                                        );
+                                    }
+
+                                    $enrollment_info['images_converted'] = 1;
+                                }
+
                                 if ($beneficiary_id && DB::table('beneficiary_payresponses_staging')
                                     ->where('beneficiary_id', $beneficiary_id)
                                     ->where('school_id', $school_id)
@@ -3006,6 +3067,71 @@ class ParametersController extends BaseController
         }
         
         return response()->json($res);
+    }
+
+    public function convertExistingImages()
+    {
+        $limit = 50;
+
+        $records = DB::table('beneficiary_payresponses_staging')
+            ->where('images_converted', 0)
+            ->limit($limit)
+            ->get();
+
+        if ($records->isEmpty()) {
+            return response()->json([
+                'message' => 'All images converted'
+            ]);
+        }
+
+        $converted = 0;
+
+        foreach ($records as $row) {
+
+            $beneficiaryId = $row->beneficiary_id;
+            $update = [];
+
+            if (!empty($row->beneficiary_image) && strlen($row->beneficiary_image) > 100) {
+                $update['beneficiary_image'] = $this->saveBase64Image(
+                    $row->beneficiary_image,
+                    'beneficiaryimages',
+                    $beneficiaryId
+                );
+            }
+
+            if (!empty($row->signature) && strlen($row->signature) > 100) {
+                $update['signature'] = $this->saveBase64Image(
+                    $row->signature,
+                    'signatureimages',
+                    $beneficiaryId
+                );
+            }
+
+            if (!empty($row->disclaimer_form) && strlen($row->disclaimer_form) > 100) {
+                $update['disclaimer_form'] = $this->saveBase64Image(
+                    $row->disclaimer_form,
+                    'disclaimerforms',
+                    $beneficiaryId
+                );
+            }
+
+            $update['images_converted'] = 1;
+
+            DB::table('beneficiary_payresponses_staging')
+                ->where('id', $row->id)
+                ->update($update);
+
+            $converted++;
+        }
+
+        $remaining = DB::table('beneficiary_payresponses_staging')
+            ->where('images_converted', 0)
+            ->count();
+
+        return response()->json([
+            'batch_processed' => $converted,
+            'remaining_records' => $remaining
+        ]);
     }
 
     public function getMobileTableParams($table_name)
@@ -4474,7 +4600,7 @@ class ParametersController extends BaseController
         }
     }
 
-      public function saveSchoolBankApprovalInfo(Request $req)
+    public function saveSchoolBankApprovalInfo(Request $req)
     {
         $user_id = \Auth::user()->id;
         $post_data = $req->all();

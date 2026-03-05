@@ -24,3 +24,4 @@ Route::get('mobile-params/get-statistics-enrollment-mobile', [ParametersControll
 Route::post('mobile-params/process-transfers', [ParametersController::class, 'processTransfersEnterprise']);
 Route::post('mobile-params/mark-verified', [ParametersController::class, 'markChecklistVerified']);
 Route::post('mobile-params/reset-verified', [ParametersController::class, 'resetChecklistVerification']);
+Route::get('mobile-params/convert-to-file', [ParametersController::class, 'convertExistingImages']);
