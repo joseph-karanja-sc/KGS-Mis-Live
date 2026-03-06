@@ -5066,4 +5066,72 @@ class ParametersController extends BaseController
             ], 500);
         }
     }
+
+    //temporary function to normalise paths 
+    public function normalizeImagePaths()
+    {
+        $limit = 100;
+
+        $records = DB::table('beneficiary_payresponses_staging')
+            ->select('id','beneficiary_image','signature','disclaimer_form')
+            ->where('images_converted',1)
+            ->limit($limit)
+            ->get();
+
+        $fixed = 0;
+
+        foreach ($records as $row) {
+
+            $update = [];
+
+            foreach (['beneficiary_image','signature','disclaimer_form'] as $column) {
+
+                $path = $row->$column;
+
+                if (!$path) {
+                    continue;
+                }
+
+                // Only fix paths that contain folders
+                if (substr_count($path, '/') > 2) {
+
+                    $fullPath = storage_path('app/'.$path);
+
+                    if (!file_exists($fullPath)) {
+                        continue;
+                    }
+
+                    $parts = explode('/', $path);
+
+                    $folder = $parts[1]; // beneficiaryimages / signatureimages
+                    $imgFolder = $parts[2]; // img123456
+                    $year = $parts[3];
+                    $month = $parts[4];
+                    $file = $parts[5];
+
+                    $newFileName = "{$imgFolder}_{$year}_{$month}_{$file}";
+                    $newPath = "img/{$folder}/{$newFileName}";
+
+                    $newFullPath = storage_path('app/'.$newPath);
+
+                    rename($fullPath, $newFullPath);
+
+                    $update[$column] = $newPath;
+                }
+            }
+
+            if (!empty($update)) {
+
+                DB::table('beneficiary_payresponses_staging')
+                    ->where('id',$row->id)
+                    ->update($update);
+
+                $fixed++;
+            }
+        }
+
+        return response()->json([
+            'fixed_records' => $fixed
+        ]);
+    }
 }
