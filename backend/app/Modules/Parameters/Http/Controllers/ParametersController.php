@@ -2857,34 +2857,33 @@ class ParametersController extends BaseController
 
     // }
 
-    //private function to convert base 64 images to file path
-    private function saveBase64Image($base64, $folder, $beneficiaryId)
+    
+    //private function to convert base 64 images to file path(fixed to remove creation of extra folders)
+    public function saveBase64Image($base64Image, $folder, $beneficiaryId)
     {
-        if (!$base64) {
-            return null;
+        $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
+        $imageData = base64_decode($base64Image);
+
+        if (!$imageData) {
+            throw new \Exception("Invalid base64 image");
         }
 
-        $year  = date('y');
+        $year = date('Y');
         $month = date('m');
 
-        $relativeDir = "img/{$folder}/img{$beneficiaryId}/{$year}/{$month}";
-        $fullDir = public_path($relativeDir);
+        $fileName = "img{$beneficiaryId}_{$year}_{$month}_" . uniqid() . ".png";
 
-        if (!file_exists($fullDir)) {
-            mkdir($fullDir, 0777, true);
+        $directory = storage_path("app/{$folder}");
+
+        if (!file_exists($directory)) {
+            mkdir($directory, 0777, true);
         }
 
-        $fileName = uniqid() . ".jpg";
+        $filePath = $directory . '/' . $fileName;
 
-        $base64 = preg_replace('#^data:image/\w+;base64,#i', '', $base64);
-        $base64 = str_replace(' ', '+', $base64);
+        file_put_contents($filePath, $imageData);
 
-        file_put_contents(
-            $fullDir . '/' . $fileName,
-            base64_decode($base64)
-        );
-
-        return $relativeDir . '/' . $fileName;
+        return "{$folder}/{$fileName}";
     }
 
     //added base64 conversion to file path
