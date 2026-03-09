@@ -3171,7 +3171,7 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
-    public function convertExistingImages()
+    public function convertExistingImagesOld()
     {
         $limit = 50;
 
@@ -3233,6 +3233,108 @@ class ParametersController extends BaseController
         return response()->json([
             'batch_processed' => $converted,
             'remaining_records' => $remaining
+        ]);
+    }
+
+    public function convertExistingImages()
+    {
+        $startTime = microtime(true);
+        $startDateTime = now();
+
+        $limit = 50;
+        $totalProcessed = 0;
+        $loopCount = 0;
+        $maxLoops = 100000; // infinite loop protection
+
+        $logs = [];
+        $logs[] = "Image conversion started at {$startDateTime}";
+
+        while (true) {
+
+            $loopCount++;
+
+            if ($loopCount > $maxLoops) {
+                $logs[] = "Safety break triggered. Max loop limit reached.";
+                break;
+            }
+
+            $records = DB::table('beneficiary_payresponses_staging')
+                ->where('images_converted', 0)
+                ->limit($limit)
+                ->get();
+
+            if ($records->isEmpty()) {
+                $logs[] = "No more records found. Conversion completed.";
+                break;
+            }
+
+            $converted = 0;
+
+            foreach ($records as $row) {
+
+                $beneficiaryId = $row->beneficiary_id;
+                $update = [];
+
+                if (!empty($row->beneficiary_image) && strlen($row->beneficiary_image) > 100) {
+                    $update['beneficiary_image'] = $this->saveBase64Image(
+                        $row->beneficiary_image,
+                        'beneficiaryimages',
+                        $beneficiaryId
+                    );
+                }
+
+                if (!empty($row->signature) && strlen($row->signature) > 100) {
+                    $update['signature'] = $this->saveBase64Image(
+                        $row->signature,
+                        'signatureimages',
+                        $beneficiaryId
+                    );
+                }
+
+                if (!empty($row->disclaimer_form) && strlen($row->disclaimer_form) > 100) {
+                    $update['disclaimer_form'] = $this->saveBase64Image(
+                        $row->disclaimer_form,
+                        'disclaimerforms',
+                        $beneficiaryId
+                    );
+                }
+
+                $update['images_converted'] = 1;
+
+                DB::table('beneficiary_payresponses_staging')
+                    ->where('id', $row->id)
+                    ->update($update);
+
+                $converted++;
+            }
+
+            $totalProcessed += $converted;
+
+            $remaining = DB::table('beneficiary_payresponses_staging')
+                ->where('images_converted', 0)
+                ->count();
+
+            $logs[] = "Batch {$loopCount} processed: {$converted} records. Remaining: {$remaining}";
+
+            // small pause to reduce DB pressure
+            usleep(100000); // 0.1 seconds
+        }
+
+        $endTime = microtime(true);
+        $executionTime = round($endTime - $startTime, 2);
+        $endDateTime = now();
+
+        $logs[] = "Conversion finished at {$endDateTime}";
+        $logs[] = "Total records processed: {$totalProcessed}";
+        $logs[] = "Execution time: {$executionTime} seconds";
+
+        return response()->json([
+            'message' => 'Image conversion completed',
+            'start_time' => $startDateTime,
+            'end_time' => $endDateTime,
+            'execution_time_seconds' => $executionTime,
+            'total_processed' => $totalProcessed,
+            'logs' => $logs
         ]);
     }
 
@@ -4910,7 +5012,7 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
-    public function processTransfersEnterprise()
+    public function processTransfersEnterpriseOld()
     {
         DB::beginTransaction();
 
@@ -4963,6 +5065,119 @@ class ParametersController extends BaseController
             return response()->json([
                 'message' => 'Transfer processing failed',
                 'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function processTransfersEnterprise()
+    {
+        $startTime = microtime(true);
+        $logs = [];
+
+        $logs[] = "Transfer processing started";
+        Log::info("Transfer processing started");
+
+        DB::beginTransaction();
+
+        try {
+
+            $date = '2026-02-19 00:00:00';
+            $createdBy = auth()->user()->id ?? 'system';
+
+            // COUNT RECORDS
+            $recordsToProcess = DB::table('beneficiary_payresponses_staging')
+                ->where('DATETIME', '>=', $date)
+                ->where('is_transfered', 1)
+                ->count();
+
+            $logs[] = "Records found for transfer: {$recordsToProcess}";
+            Log::info("Transfers found", ['records_to_process' => $recordsToProcess]);
+
+            // INSERT AUDIT RECORDS
+            DB::statement("
+                INSERT INTO transfers_audit 
+                (beneficiary_id, prev_school_id, current_school_id, created_at, created_by)
+                SELECT 
+                    s1.beneficiary_id,
+                    s1.school_id,
+                    s1.school_transfered_to,
+                    NOW(),
+                    ?
+                FROM beneficiary_payresponses_staging s1
+                WHERE s1.DATETIME >= ?
+                AND s1.is_transfered = 1
+            ", [$createdBy, $date]);
+
+            $logs[] = "Audit records inserted: {$recordsToProcess}";
+            Log::info("Transfers inserted into audit table", [
+                'inserted_records' => $recordsToProcess
+            ]);
+
+            // UPDATE BENEFICIARY SCHOOL
+            $updatedCount = DB::affectingStatement("
+                UPDATE beneficiary_information t1
+                INNER JOIN beneficiary_payresponses_staging s1
+                    ON t1.beneficiary_id = s1.beneficiary_id
+                SET t1.school_id = s1.school_transfered_to
+                WHERE s1.DATETIME >= ?
+                AND s1.is_transfered = 1
+            ", [$date]);
+
+            $logs[] = "Beneficiary records updated: {$updatedCount}";
+            Log::info("Beneficiary schools updated", [
+                'updated_records' => $updatedCount
+            ]);
+
+
+            // DELETE STAGING RECORDS
+            $deletedCount = DB::affectingStatement("
+                DELETE FROM beneficiary_payresponses_staging
+                WHERE DATETIME >= ?
+                AND is_transfered = 1
+            ", [$date]);
+
+            $logs[] = "Staging records deleted: {$deletedCount}";
+            Log::info("Staging records deleted", [
+                'deleted_records' => $deletedCount
+            ]);
+
+            DB::commit();
+
+            $executionTime = round(microtime(true) - $startTime, 2);
+
+            $logs[] = "Execution time: {$executionTime} seconds";
+            $logs[] = "Transfer processing completed successfully";
+
+            Log::info("Transfer processing completed", [
+                'records_inserted' => $recordsToProcess,
+                'records_updated' => $updatedCount,
+                'records_deleted' => $deletedCount,
+                'execution_time_seconds' => $executionTime
+            ]);
+
+            return response()->json([
+                'message' => 'Transfer processing completed successfully',
+                'records_inserted_audit' => $recordsToProcess,
+                'records_updated_beneficiary' => $updatedCount,
+                'records_deleted_staging' => $deletedCount,
+                'execution_time_seconds' => $executionTime,
+                'logs' => $logs
+            ]);
+
+        } catch (\Exception $e) {
+
+            DB::rollBack();
+
+            $logs[] = "ERROR: " . $e->getMessage();
+
+            Log::error('Transfer processing failed', [
+                'error_message' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'message' => 'Transfer processing failed',
+                'error'   => $e->getMessage(),
+                'logs' => $logs
             ], 500);
         }
     }
@@ -5058,73 +5273,7 @@ class ParametersController extends BaseController
         }
     }
 
-    //temporary function to normalise paths 
-    // public function normalizeImagePaths()
-    // {
-    //     $limit = 100;
-
-    //     $records = DB::table('beneficiary_payresponses_staging')
-    //         ->select('id','beneficiary_image','signature','disclaimer_form')
-    //         ->where('images_converted',1)
-    //         ->limit($limit)
-    //         ->get();
-
-    //     $fixed = 0;
-
-    //     foreach ($records as $row) {
-
-    //         $update = [];
-
-    //         foreach (['beneficiary_image','signature','disclaimer_form'] as $column) {
-
-    //             $path = $row->$column;
-
-    //             if (!$path) {
-    //                 continue;
-    //             }
-
-    //             // Only fix paths that contain folders
-    //             if (substr_count($path, '/') > 2) {
-
-    //                 $fullPath = storage_path('app/'.$path);
-
-    //                 if (!file_exists($fullPath)) {
-    //                     continue;
-    //                 }
-
-    //                 $parts = explode('/', $path);
-
-    //                 $folder = $parts[1]; // beneficiaryimages / signatureimages
-    //                 $imgFolder = $parts[2]; // img123456
-    //                 $year = $parts[3];
-    //                 $month = $parts[4];
-    //                 $file = $parts[5];
-
-    //                 $newFileName = "{$imgFolder}_{$year}_{$month}_{$file}";
-    //                 $newPath = "img/{$folder}/{$newFileName}";
-
-    //                 $newFullPath = storage_path('app/'.$newPath);
-
-    //                 rename($fullPath, $newFullPath);
-
-    //                 $update[$column] = $newPath;
-    //             }
-    //         }
-
-    //         if (!empty($update)) {
-
-    //             DB::table('beneficiary_payresponses_staging')
-    //                 ->where('id',$row->id)
-    //                 ->update($update);
-
-    //             $fixed++;
-    //         }
-    //     }
-
-    //     return response()->json([
-    //         'fixed_records' => $fixed
-    //     ]);
-    // }
+    //temporary function to normalise paths
     public function normalizeImagePaths()
     {
         $limit = 100;
