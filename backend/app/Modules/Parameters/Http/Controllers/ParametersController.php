@@ -4918,7 +4918,7 @@ class ParametersController extends BaseController
 
             $date = '2026-02-19 00:00:00';
 
-            // 1. Insert only NEW transfers into audit
+            // Audit trail
             DB::statement("
                 INSERT INTO transfers_audit (beneficiary_id, prev_school_id, current_school_id)
                 SELECT 
@@ -4926,42 +4926,34 @@ class ParametersController extends BaseController
                     s1.school_id,
                     s1.school_transfered_to
                 FROM beneficiary_payresponses_staging s1
-                LEFT JOIN transfers_audit ta
-                    ON ta.beneficiary_id = s1.beneficiary_id
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
-                AND ta.beneficiary_id IS NULL
             ", [$date]);
 
 
-            // 2. Update beneficiary school ONLY if not already updated
+            // Update beneficiary school
             DB::statement("
                 UPDATE beneficiary_information t1
                 INNER JOIN beneficiary_payresponses_staging s1
                     ON t1.beneficiary_id = s1.beneficiary_id
-                LEFT JOIN transfers_audit ta
-                    ON ta.beneficiary_id = s1.beneficiary_id
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
             ", [$date]);
 
 
-            // 3. Delete processed staging records
+            // Delete processed staging records
             DB::statement("
-                DELETE s1
-                FROM beneficiary_payresponses_staging s1
-                INNER JOIN transfers_audit ta
-                    ON ta.beneficiary_id = s1.beneficiary_id
-                WHERE s1.DATETIME >= ?
-                AND s1.is_transfered = 1
+                DELETE FROM beneficiary_payresponses_staging
+                WHERE DATETIME >= ?
+                AND is_transfered = 1
             ", [$date]);
 
 
             DB::commit();
 
             return response()->json([
-                'message' => 'Enterprise transfer processing completed safely'
+                'message' => 'Enterprise transfer processing completed successfully'
             ]);
 
         } catch (\Exception $e) {
