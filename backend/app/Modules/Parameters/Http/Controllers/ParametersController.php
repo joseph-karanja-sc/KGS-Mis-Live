@@ -3238,104 +3238,140 @@ class ParametersController extends BaseController
 
     public function convertExistingImages()
     {
+        set_time_limit(0);
+
         $startTime = microtime(true);
         $startDateTime = now();
 
-        $limit = 50;
+        $limit = 1;
         $totalProcessed = 0;
+        $failed = 0;
         $loopCount = 0;
-        $maxLoops = 100000; // infinite loop protection
+        $maxLoops = 1000;
 
         $logs = [];
         $logs[] = "Image conversion started at {$startDateTime}";
 
-        while (true) {
+        try {
 
-            $loopCount++;
+            while (true) {
 
-            if ($loopCount > $maxLoops) {
-                $logs[] = "Safety break triggered. Max loop limit reached.";
-                break;
-            }
+                $loopCount++;
 
-            $records = DB::table('beneficiary_payresponses_staging')
-                ->where('images_converted', 0)
-                ->limit($limit)
-                ->get();
-
-            if ($records->isEmpty()) {
-                $logs[] = "No more records found. Conversion completed.";
-                break;
-            }
-
-            $converted = 0;
-
-            foreach ($records as $row) {
-
-                $beneficiaryId = $row->beneficiary_id;
-                $update = [];
-
-                if (!empty($row->beneficiary_image) && strlen($row->beneficiary_image) > 100) {
-                    $update['beneficiary_image'] = $this->saveBase64Image(
-                        $row->beneficiary_image,
-                        'beneficiaryimages',
-                        $beneficiaryId
-                    );
+                if ($loopCount > $maxLoops) {
+                    $logs[] = "Safety break triggered. Max loop limit reached.";
+                    break;
                 }
 
-                if (!empty($row->signature) && strlen($row->signature) > 100) {
-                    $update['signature'] = $this->saveBase64Image(
-                        $row->signature,
-                        'signatureimages',
-                        $beneficiaryId
-                    );
+                $records = DB::table('beneficiary_payresponses_staging')
+                    ->where('images_converted', 0)
+                    ->limit($limit)
+                    ->get();
+
+                if ($records->isEmpty()) {
+                    $logs[] = "No more records found. Conversion completed.";
+                    break;
                 }
 
-                if (!empty($row->disclaimer_form) && strlen($row->disclaimer_form) > 100) {
-                    $update['disclaimer_form'] = $this->saveBase64Image(
-                        $row->disclaimer_form,
-                        'disclaimerforms',
-                        $beneficiaryId
-                    );
+                $converted = 0;
+
+                foreach ($records as $row) {
+
+                    try {
+
+                        $beneficiaryId = $row->beneficiary_id;
+                        $update = [];
+
+                        if (!empty($row->beneficiary_image) && strlen($row->beneficiary_image) > 100) {
+                            $update['beneficiary_image'] = $this->saveBase64Image(
+                                $row->beneficiary_image,
+                                'beneficiaryimages',
+                                $beneficiaryId
+                            );
+                        }
+
+                        if (!empty($row->signature) && strlen($row->signature) > 100) {
+                            $update['signature'] = $this->saveBase64Image(
+                                $row->signature,
+                                'signatureimages',
+                                $beneficiaryId
+                            );
+                        }
+
+                        if (!empty($row->disclaimer_form) && strlen($row->disclaimer_form) > 100) {
+                            $update['disclaimer_form'] = $this->saveBase64Image(
+                                $row->disclaimer_form,
+                                'disclaimerforms',
+                                $beneficiaryId
+                            );
+                        }
+
+                        $update['images_converted'] = 1;
+
+                        DB::table('beneficiary_payresponses_staging')
+                            ->where('id', $row->id)
+                            ->update($update);
+
+                        $converted++;
+
+                    } catch (\Exception $e) {
+
+                        $failed++;
+
+                        $logs[] = "ERROR converting record ID {$row->id} (beneficiary {$row->beneficiary_id}): "
+                            . $e->getMessage();
+
+                        \Log::error("Image conversion failed", [
+                            'record_id' => $row->id,
+                            'beneficiary_id' => $row->beneficiary_id,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
                 }
 
-                $update['images_converted'] = 1;
+                $totalProcessed += $converted;
 
-                DB::table('beneficiary_payresponses_staging')
-                    ->where('id', $row->id)
-                    ->update($update);
+                $remaining = DB::table('beneficiary_payresponses_staging')
+                    ->where('images_converted', 0)
+                    ->count();
 
-                $converted++;
+                $logs[] = "Batch {$loopCount}: converted {$converted}, failed {$failed}, remaining {$remaining}";
+
+                usleep(100000);
             }
 
-            $totalProcessed += $converted;
+            $endTime = microtime(true);
+            $executionTime = round($endTime - $startTime, 2);
+            $endDateTime = now();
 
-            $remaining = DB::table('beneficiary_payresponses_staging')
-                ->where('images_converted', 0)
-                ->count();
+            $logs[] = "Conversion finished at {$endDateTime}";
+            $logs[] = "Total processed: {$totalProcessed}";
+            $logs[] = "Total failed: {$failed}";
+            $logs[] = "Execution time: {$executionTime} seconds";
 
-            $logs[] = "Batch {$loopCount} processed: {$converted} records. Remaining: {$remaining}";
+            return response()->json([
+                'message' => 'Image conversion completed',
+                'start_time' => $startDateTime,
+                'end_time' => $endDateTime,
+                'execution_time_seconds' => $executionTime,
+                'total_processed' => $totalProcessed,
+                'failed_records' => $failed,
+                'logs' => $logs
+            ]);
 
-            // small pause to reduce DB pressure
-            usleep(100000); // 0.1 seconds
+        } catch (\Exception $e) {
+
+            \Log::error("Fatal error during image conversion", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Fatal error during conversion',
+                'error' => $e->getMessage(),
+                'logs' => $logs
+            ], 500);
         }
-
-        $endTime = microtime(true);
-        $executionTime = round($endTime - $startTime, 2);
-        $endDateTime = now();
-
-        $logs[] = "Conversion finished at {$endDateTime}";
-        $logs[] = "Total records processed: {$totalProcessed}";
-        $logs[] = "Execution time: {$executionTime} seconds";
-
-        return response()->json([
-            'message' => 'Image conversion completed',
-            'start_time' => $startDateTime,
-            'end_time' => $endDateTime,
-            'execution_time_seconds' => $executionTime,
-            'total_processed' => $totalProcessed,
-            'logs' => $logs
-        ]);
     }
 
     public function getMobileTableParams($table_name)
