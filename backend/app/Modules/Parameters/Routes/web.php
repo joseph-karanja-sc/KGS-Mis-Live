@@ -72,7 +72,7 @@ Route::group(['prefix' => 'parameters'], function () {
 
 Route::group(['prefix' => 'mobile_params'], function () {
     Route::get('getMobileParams', 'ParametersController@getMobileParams');
-    Route::post('syncMobileInfo', 'ParametersController@syncMobileInfo');
+    Route::post('syncMobileInfo1', 'ParametersController@syncMobileInfo');
     Route::get('getSyncedVerificationData', 'ParametersController@getSyncedVerificationData');
     Route::get('getSyncedUploadData', 'ParametersController@getSyncedUploadData');
     Route::post('getOfflineAbsentGirlsbatchinfo', 'ParametersController@getOfflineAbsentGirlsbatchinfo');
