@@ -4944,7 +4944,6 @@ class ParametersController extends BaseController
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
-                AND ta.beneficiary_id IS NULL
             ", [$date]);
 
 
