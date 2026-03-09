@@ -2861,29 +2861,54 @@ class ParametersController extends BaseController
     //private function to convert base 64 images to file path(fixed to remove creation of extra folders)
     public function saveBase64Image($base64Image, $folder, $beneficiaryId)
     {
-        $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
-        $imageData = base64_decode($base64Image);
+        try {
 
-        if (!$imageData) {
-            throw new \Exception("Invalid base64 image");
+            if (empty($base64Image)) {
+                throw new \Exception("Empty base64 image provided");
+            }
+
+            // Remove base64 header if present
+            $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
+
+            $imageData = base64_decode($base64Image, true);
+
+            if ($imageData === false) {
+                throw new \Exception("Invalid base64 image data");
+            }
+
+            $year = date('Y');
+            $month = date('m');
+
+            $fileName = "img{$beneficiaryId}_{$year}_{$month}_" . uniqid() . ".png";
+
+            $directory = storage_path("app/{$folder}");
+
+            if (!is_dir($directory)) {
+                if (!mkdir($directory, 0777, true) && !is_dir($directory)) {
+                    throw new \Exception("Failed to create directory: {$directory}");
+                }
+            }
+
+            $filePath = $directory . '/' . $fileName;
+
+            $bytesWritten = file_put_contents($filePath, $imageData);
+
+            if ($bytesWritten === false) {
+                throw new \Exception("Failed to write image to disk: {$filePath}");
+            }
+
+            return "{$folder}/{$fileName}";
+
+        } catch (\Exception $e) {
+
+            \Log::error("saveBase64Image failed", [
+                'beneficiary_id' => $beneficiaryId,
+                'folder' => $folder,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
         }
-
-        $year = date('Y');
-        $month = date('m');
-
-        $fileName = "img{$beneficiaryId}_{$year}_{$month}_" . uniqid() . ".png";
-
-        $directory = storage_path("app/{$folder}");
-
-        if (!file_exists($directory)) {
-            mkdir($directory, 0777, true);
-        }
-
-        $filePath = $directory . '/' . $fileName;
-
-        file_put_contents($filePath, $imageData);
-
-        return "{$folder}/{$fileName}";
     }
 
     //added base64 conversion to file path
