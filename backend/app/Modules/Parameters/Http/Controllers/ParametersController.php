@@ -2867,7 +2867,7 @@ class ParametersController extends BaseController
                 throw new \Exception("Empty base64 image provided");
             }
 
-            // Remove base64 header if present
+            // Remove header if present
             $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
 
             $imageData = base64_decode($base64Image, true);
@@ -2879,9 +2879,9 @@ class ParametersController extends BaseController
             $year = date('Y');
             $month = date('m');
 
-            $fileName = "img{$beneficiaryId}_{$year}_{$month}_" . uniqid() . ".png";
+            $fileName = "img{$beneficiaryId}_{$year}_{$month}_" . uniqid() . ".jpg";
 
-            $directory = storage_path("app/{$folder}");
+            $directory = public_path("img/{$folder}");
 
             if (!is_dir($directory)) {
                 if (!mkdir($directory, 0777, true) && !is_dir($directory)) {
@@ -2969,7 +2969,7 @@ class ParametersController extends BaseController
                                     $enrollment_info['beneficiary_image'] =
                                         $this->saveBase64Image(
                                             $enrollment_info['beneficiary_image'],
-                                            'beneficiaryimages',
+                                            'images',
                                             $beneficiary_id
                                         );
                                 }
@@ -2980,7 +2980,7 @@ class ParametersController extends BaseController
                                     $enrollment_info['signature'] =
                                         $this->saveBase64Image(
                                             $enrollment_info['signature'],
-                                            'signatureimages',
+                                            'signature',
                                             $beneficiary_id
                                         );
                                 }
@@ -2991,7 +2991,7 @@ class ParametersController extends BaseController
                                     $enrollment_info['disclaimer_form'] =
                                         $this->saveBase64Image(
                                             $enrollment_info['disclaimer_form'],
-                                            'disclaimerforms',
+                                            'consentforms',
                                             $beneficiary_id
                                         );
                                 }
@@ -3268,131 +3268,113 @@ class ParametersController extends BaseController
         $startTime = microtime(true);
         $startDateTime = now();
 
-        $limit = 1;
-        $totalProcessed = 0;
-        $failed = 0;
-        $loopCount = 0;
-        $maxLoops = 1000;
-
         $logs = [];
-        $logs[] = "Image conversion started at {$startDateTime}";
+        $logs[] = "Base64 image conversion started at {$startDateTime}";
 
         try {
 
-            while (true) {
+            $record = DB::table('beneficiary_payresponses_staging')
+                ->select(
+                    'id',
+                    'beneficiary_id',
+                    'beneficiary_image',
+                    'signature',
+                    'disclaimer_form'
+                )
+                ->where('verification_status', 'pending')
+                ->where('images_converted', 0)
+                ->orderBy('id')
+                ->limit(1)
+                ->first();
 
-                $loopCount++;
+            if (!$record) {
 
-                if ($loopCount > $maxLoops) {
-                    $logs[] = "Safety break triggered. Max loop limit reached.";
-                    break;
-                }
+                $logs[] = "No pending records found";
 
-                $records = DB::table('beneficiary_payresponses_staging')
-                    ->where('images_converted', 0)
-                    ->limit($limit)
-                    ->get();
-
-                if ($records->isEmpty()) {
-                    $logs[] = "No more records found. Conversion completed.";
-                    break;
-                }
-
-                $converted = 0;
-
-                foreach ($records as $row) {
-
-                    try {
-
-                        $beneficiaryId = $row->beneficiary_id;
-                        $update = [];
-
-                        if (!empty($row->beneficiary_image) && strlen($row->beneficiary_image) > 100) {
-                            $update['beneficiary_image'] = $this->saveBase64Image(
-                                $row->beneficiary_image,
-                                'beneficiaryimages',
-                                $beneficiaryId
-                            );
-                        }
-
-                        if (!empty($row->signature) && strlen($row->signature) > 100) {
-                            $update['signature'] = $this->saveBase64Image(
-                                $row->signature,
-                                'signatureimages',
-                                $beneficiaryId
-                            );
-                        }
-
-                        if (!empty($row->disclaimer_form) && strlen($row->disclaimer_form) > 100) {
-                            $update['disclaimer_form'] = $this->saveBase64Image(
-                                $row->disclaimer_form,
-                                'disclaimerforms',
-                                $beneficiaryId
-                            );
-                        }
-
-                        $update['images_converted'] = 1;
-
-                        DB::table('beneficiary_payresponses_staging')
-                            ->where('id', $row->id)
-                            ->update($update);
-
-                        $converted++;
-
-                    } catch (\Exception $e) {
-
-                        $failed++;
-
-                        $logs[] = "ERROR converting record ID {$row->id} (beneficiary {$row->beneficiary_id}): "
-                            . $e->getMessage();
-
-                        \Log::error("Image conversion failed", [
-                            'record_id' => $row->id,
-                            'beneficiary_id' => $row->beneficiary_id,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
-                }
-
-                $totalProcessed += $converted;
-
-                $remaining = DB::table('beneficiary_payresponses_staging')
-                    ->where('images_converted', 0)
-                    ->count();
-
-                $logs[] = "Batch {$loopCount}: converted {$converted}, failed {$failed}, remaining {$remaining}";
-
-                usleep(100000);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No base64 records found',
+                    'logs' => $logs
+                ]);
             }
+
+            $beneficiaryId = $record->beneficiary_id;
+            $update = [];
+
+            $logs[] = "Processing record ID {$record->id}";
+            $logs[] = "Beneficiary {$beneficiaryId}";
+
+            // Convert beneficiary image
+            if (!empty($record->beneficiary_image) && strlen($record->beneficiary_image) > 200) {
+
+                $logs[] = "Converting beneficiary image";
+
+                $update['beneficiary_image'] = $this->saveBase64Image(
+                    $record->beneficiary_image,
+                    'beneficiaryimages',
+                    $beneficiaryId
+                );
+            }
+
+            // Convert signature
+            if (!empty($record->signature) && strlen($record->signature) > 200) {
+
+                $logs[] = "Converting signature";
+
+                $update['signature'] = $this->saveBase64Image(
+                    $record->signature,
+                    'signatureimages',
+                    $beneficiaryId
+                );
+            }
+
+            // Convert disclaimer form
+            if (!empty($record->disclaimer_form) && strlen($record->disclaimer_form) > 200) {
+
+                $logs[] = "Converting disclaimer form";
+
+                $update['disclaimer_form'] = $this->saveBase64Image(
+                    $record->disclaimer_form,
+                    'disclaimerforms',
+                    $beneficiaryId
+                );
+            }
+
+            $update['images_converted'] = 1;
+
+            DB::table('beneficiary_payresponses_staging')
+                ->where('id', $record->id)
+                ->update($update);
 
             $endTime = microtime(true);
             $executionTime = round($endTime - $startTime, 2);
             $endDateTime = now();
 
-            $logs[] = "Conversion finished at {$endDateTime}";
-            $logs[] = "Total processed: {$totalProcessed}";
-            $logs[] = "Total failed: {$failed}";
+            $logs[] = "Record {$record->id} converted successfully";
             $logs[] = "Execution time: {$executionTime} seconds";
 
             return response()->json([
-                'message' => 'Image conversion completed',
+                'success' => true,
+                'record_id' => $record->id,
+                'beneficiary_id' => $beneficiaryId,
                 'start_time' => $startDateTime,
                 'end_time' => $endDateTime,
                 'execution_time_seconds' => $executionTime,
-                'total_processed' => $totalProcessed,
-                'failed_records' => $failed,
                 'logs' => $logs
             ]);
 
         } catch (\Exception $e) {
 
-            \Log::error("Fatal error during image conversion", [
+            \Log::error("convertExistingImages failed", [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
+            $logs[] = "ERROR: " . $e->getMessage();
+
             return response()->json([
-                'message' => 'Fatal error during conversion',
+                'success' => false,
+                'message' => 'Conversion failed',
                 'error' => $e->getMessage(),
                 'logs' => $logs
             ], 500);
