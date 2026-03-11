@@ -27,3 +27,4 @@ resources/
 seeddms/
 _gsdata_/
 *.zip
+backend/.gitignore
