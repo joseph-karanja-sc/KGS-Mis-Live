@@ -25,3 +25,5 @@ gitignore
 mis_dms/
 resources/
 seeddms/
+_gsdata_/
+*.zip
