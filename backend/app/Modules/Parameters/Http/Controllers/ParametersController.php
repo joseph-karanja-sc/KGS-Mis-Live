@@ -2751,6 +2751,7 @@ class ParametersController extends BaseController
                 }
             }
 
+            //Full disk path where the image file will be written
             $filePath = $directory . '/' . $fileName;
 
             $bytesWritten = file_put_contents($filePath, $imageData);
@@ -2759,8 +2760,8 @@ class ParametersController extends BaseController
                 throw new \Exception("Failed to write image to disk: {$filePath}");
             }
 
-            //Return path including backend/public/img prefix
-            return "backend/public/img/{$folder}/{$fileName}";
+            //Return the full public URL that will be stored in the database
+            return "https://kgsmis.edu.gov.zm/backend/public/img/{$folder}/{$fileName}";
 
         } catch (\Exception $e) {
 
