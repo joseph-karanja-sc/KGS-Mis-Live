@@ -2459,7 +2459,7 @@ class ParametersController extends BaseController
 
             $query = DB::table('beneficiary_uploadfiles_staging as t1')
                 ->leftJoin('beneficiary_images_staging as t2', 't2.image_type', '=', 't1.id')
-                ->leftJoin('beneficiary_payresponses_staging as t3', 't2.beneficiary_id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.id')
                 ->leftJoin('beneficiary_images as t4', 't2.beneficiary_id', '=', 't4.girl_id')
                 ->selectRaw(
                     't2.id, t2.beneficiary_id, t2.image_type, t2.school_id, 
@@ -2501,80 +2501,12 @@ class ParametersController extends BaseController
         }
     }
     
-    /**
-     * @param Request $req
-     * @return \Illuminate\Http\JsonResponse
-     */
-    // public function getSyncedUploadData(Request $req)
-    // {
-    //     try {
-    //         $second_req = $req;
-    //         // Validate input
-    //         $schoolId = $req->input('school_id');
-    //         $limit = (int) ($req->input('limit') ?? 500); // Paginate results
-            
-    //         if ($schoolId && !is_numeric($schoolId)) {
-    //             return response()->json([
-    //                 'success' => false,
-    //                 'message' => 'Invalid school ID provided'
-    //             ], 400);
-    //         }
-
-    //         // Use pagination to avoid memory issues
-    //         $query = DB::table('beneficiary_payresponses_staging as t1')
-    //             ->selectRaw('t1.id, t1.school_id, t1.signature, t1.beneficiary_image, 
-    //                 t1.disclaimer_form, t1.images_converted')
-    //             ->where('t1.verification_status', 'pending')
-    //             ->where('t1.school_id', $schoolId)
-    //             ->where('t1.is_enrolled', 1)
-    //             ->where('t1.images_converted', 0) // Only fetch unconverted images
-    //             ->when($schoolId, function ($query) use ($schoolId) {
-    //                 return $query->where('t1.school_id', $schoolId);
-    //             });
-
-    //         // Get total count without loading data
-    //         $totalPending = (clone $query)->count();
-
-    //         if ($totalPending === 0) {
-    //             return $this->getSyncedUploadResults($second_req);
-    //             // return response()->json([
-    //             //     'success' => true,
-    //             //     'results' => [],
-    //             //     'message' => 'No pending beneficiaries to process',
-    //             //     'total' => 0
-    //             // ]);
-    //         }
-    //         $girls = $query->get()->toArray();
-    //         // dd($girls);
-    //         dispatch(new ProcessBeneficiaryImagesJob($girls));
-    //         // // Dispatch async processing job for each chunk
-    //         // $query->limit($limit)->orderBy('t1.id')->chunk(100, function ($query) {
-    //         //     dispatch(new ProcessBeneficiaryImagesJob($query->toArray()));
-    //         // });
-    //         // Return immediately without waiting for processing
-    //         // return response()->json([
-    //         //     'success' => true,
-    //         //     'message' => "Processing {$totalPending} pending records asynchronously",
-    //         //     'total_pending' => $totalPending,
-    //         //     'status' => 'queued'
-    //         // ], 202); // 202 Accepted
-
-    //     } catch (\Exception $e) {
-    //         Log::error('getSyncedUploadData error: ' . $e->getMessage(), [
-    //             'trace' => $e->getTraceAsString()
-    //         ]);
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'An error occurred while processing synced upload data'
-    //         ], 500);
-    //     }
-    // }
      public function getSyncedUploadData(Request $req)
     {
         try {
             $post_data = $req->all();
             $school_id = $post_data['school_id'];
-            $qry = DB::table('beneficiary_payresponses_staging as t1')
+            $qry = DB::table('beneficiary_payresponses_staging_clone as t1')
                 ->selectRaw('t1.id,t1.signature,t1.beneficiary_image,t1.disclaimer_form,t1.images_converted');
             if(isset($school_id)) {
                 $qry->where('t1.school_id', $school_id);
@@ -2654,7 +2586,7 @@ class ParametersController extends BaseController
                             }
                         }
                         if ($img_update) {
-                            DB::table('beneficiary_payresponses_staging')
+                            DB::table('beneficiary_payresponses_staging_clone')
                                 ->where('id', $beneficiary->id)
                                 ->update($img_update);
                         }
@@ -2663,7 +2595,7 @@ class ParametersController extends BaseController
 
             $fin_qry = DB::table('beneficiary_uploadfiles_staging as t1')
                 ->leftJoin('beneficiary_images_staging as t2', 't2.image_type', '=', 't1.id')
-                ->leftJoin('beneficiary_payresponses_staging as t3', 't2.beneficiary_id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.id')
                 ->selectRaw('t2.id,t2.beneficiary_id,t2.image_type,t2.school_id,
                         t1.file_name as image_name,t2.image_name as image_file,t2.image_name as image_view,
                         CONCAT(t3.first_name," ",t3.surname) AS full_name,t3.id as ben_id, "Image-PNG" as file_type');
@@ -2786,77 +2718,6 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
-    // public function syncMobileInfo(Request $req)
-
-    // {
-    //     Log::info("------------------------------------------------------");
-    //     $sync_item = $req->input('sync_item');
-        
-    //     $sender_id = $req->input('user_id');
-    //     $total_in_table = $req->input('total_in_table');
-    //     $total_in_batch = $req->input('total_in_batch');
-    //     $results = $req->input('results'); 
-    //     Log::info("syncMobileInfo called - Sender ID: " . $sender_id);
-
-    //     try {
-
-    //         if($results) {
-
-    //             foreach ($results as $t) {
-    //                 $enrollment_info = isset($t['enrollment_info']) ?  $t['enrollment_info'] : null;
-    //                 $fees_info = isset($t['fees']) ?  $t['fees'] : null;
-    //                 unset($t['enrollment_info']);
-    //                 unset($t['fees']);
-    //                 $meta_info = $t;
-
-    //                 if($enrollment_info) {                    
-    //                     DB::table('beneficiary_payresponses_staging')
-    //                         ->insert($enrollment_info);   
-    //                 }
-    //                 if($fees_info) {
-    //                     Db::table('beneficiary_fees_staging')
-    //                         ->where('school_id', $t['school_id'])
-    //                         ->delete();
-    //                     unset($fees_info['id']);
-    //                     DB::table('beneficiary_fees_staging')
-    //                     ->insert($fees_info); 
-    //                 }
-    //                 if($meta_info) {
-    //                     Db::table('beneficiary_metainfo_staging')
-    //                         ->where('school_id', $t['school_id'])
-    //                         ->delete();
-    //                     DB::table('beneficiary_metainfo_staging')
-    //                     ->insert($meta_info);  
-    //                 }
-    //             }
-
-    //             $res = array(
-    //                 'success' => true,
-    //                 'message' => 'Sync Info Received'
-    //             );
-
-    //         } else {
-    //             $res = array(
-    //                 'success' => false,
-    //                 'message' => 'Empty Sync Request'
-    //             );
-    //         }
-    //         Log::info("Process complete: ".json_encode($res));
-    //         Log::info("-------------------------------------");
-
-    //     } catch (\Exception $e) {
-    //         Log::error("Error occured ".$e->getMessage());
-    //         // error_log($e->getMessage());
-    //         $res = array(
-    //             'success' => false,
-    //             'message' => $e->getMessage()
-    //         );
-    //     }
-
-    //     return response()->json($res);
-
-    // }
-
     
     //private function to convert base 64 images to file path(fixed to remove creation of extra folders)
     public function saveBase64Image($base64Image, $folder, $beneficiaryId)
@@ -2912,7 +2773,7 @@ class ParametersController extends BaseController
     }
 
     //added base64 conversion to file path
-    public function syncMobileInfo(Request $req) // Fixes lock issue
+    public function syncMobileInfoOld(Request $req)
     {
         Log::info("------------------------------------------------------");
 
@@ -2963,38 +2824,32 @@ class ParametersController extends BaseController
 
 
                                 // Convert Base64 Images → File Paths
-                                if (!empty($enrollment_info['beneficiary_image']) &&
-                                    strlen($enrollment_info['beneficiary_image']) > 200) {
+                                $enrollment_info['beneficiary_image'] =
+                                    $this->storeBeneficiaryImage(
+                                        $enrollment_info['beneficiary_image'] ?? null,
+                                        $beneficiary_id,
+                                        $school_id,
+                                        'images',
+                                        1
+                                    );
 
-                                    $enrollment_info['beneficiary_image'] =
-                                        $this->saveBase64Image(
-                                            $enrollment_info['beneficiary_image'],
-                                            'images',
-                                            $beneficiary_id
-                                        );
-                                }
+                                $enrollment_info['signature'] =
+                                    $this->storeBeneficiaryImage(
+                                        $enrollment_info['signature'] ?? null,
+                                        $beneficiary_id,
+                                        $school_id,
+                                        'signature',
+                                        2
+                                    );
 
-                                if (!empty($enrollment_info['signature']) &&
-                                    strlen($enrollment_info['signature']) > 200) {
-
-                                    $enrollment_info['signature'] =
-                                        $this->saveBase64Image(
-                                            $enrollment_info['signature'],
-                                            'signature',
-                                            $beneficiary_id
-                                        );
-                                }
-
-                                if (!empty($enrollment_info['disclaimer_form']) &&
-                                    strlen($enrollment_info['disclaimer_form']) > 200) {
-
-                                    $enrollment_info['disclaimer_form'] =
-                                        $this->saveBase64Image(
-                                            $enrollment_info['disclaimer_form'],
-                                            'consentforms',
-                                            $beneficiary_id
-                                        );
-                                }
+                                $enrollment_info['disclaimer_form'] =
+                                    $this->storeBeneficiaryImage(
+                                        $enrollment_info['disclaimer_form'] ?? null,
+                                        $beneficiary_id,
+                                        $school_id,
+                                        'consentforms',
+                                        3
+                                    );
 
                                 $enrollment_info['images_converted'] = 1;
 
@@ -3044,7 +2899,7 @@ class ParametersController extends BaseController
                                 }
 
 
-                                $sql = "INSERT INTO beneficiary_payresponses_staging (" .
+                                $sql = "INSERT INTO beneficiary_payresponses_staging_clone (" .
                                     $columnList .
                                     ") VALUES (" .
                                     implode(',', $placeholders) .
@@ -3196,11 +3051,277 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
+    public function syncMobileInfo(Request $req)
+    {
+        Log::info("------------------------------------------------------");
+
+        $sender_id = $req->input('user_id');
+        $results = $req->input('results');
+
+        Log::info("syncMobileInfo called - Sender ID: " . $sender_id);
+
+        $insertedCount = 0;
+        $updatedCount = 0;
+        $syncCount = 0;
+
+        try {
+
+            if ($results && is_array($results)) {
+
+                foreach ($results as $schoolIndex => $t) {
+
+                    $school_id = $t['school_id'] ?? null;
+
+                    $enrollment_info_array = $t['enrollment_info'] ?? null;
+                    $fees_info_array = $t['fees'] ?? null;
+
+                    unset($t['enrollment_info']);
+                    unset($t['fees']);
+
+                    $meta_info = $t;
+
+                    //PROCESS ENROLLMENTS
+                    if ($enrollment_info_array && is_array($enrollment_info_array)) {
+
+                        foreach ($enrollment_info_array as $enrollIndex => $enrollment_info) {
+
+                            try {
+
+                                if (!is_array($enrollment_info) || empty($enrollment_info)) {
+                                    Log::warning("Skipping invalid enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
+                                    continue;
+                                }
+
+                                $beneficiary_id = $enrollment_info['beneficiary_id'] ?? null;
+
+                                if (!$beneficiary_id) {
+                                    Log::warning("Missing beneficiary_id at school index {$schoolIndex}, enrollment index {$enrollIndex}");
+                                    continue;
+                                }
+
+                                //Convert beneficiary image only if base64
+                                if (!empty($enrollment_info['beneficiary_image']) &&
+                                    strlen($enrollment_info['beneficiary_image']) > 200) {
+
+                                    $enrollment_info['beneficiary_image'] =
+                                        $this->storeBeneficiaryImage(
+                                            $enrollment_info['beneficiary_image'],
+                                            $beneficiary_id,
+                                            $school_id,
+                                            'images',
+                                            1
+                                        );
+                                }
+
+                                //Convert signature only if base64
+                                if (!empty($enrollment_info['signature']) &&
+                                    strlen($enrollment_info['signature']) > 200) {
+
+                                    $enrollment_info['signature'] =
+                                        $this->storeBeneficiaryImage(
+                                            $enrollment_info['signature'],
+                                            $beneficiary_id,
+                                            $school_id,
+                                            'signature',
+                                            2
+                                        );
+                                }
+
+                                //Convert disclaimer form only if base64
+                                if (!empty($enrollment_info['disclaimer_form']) &&
+                                    strlen($enrollment_info['disclaimer_form']) > 200) {
+
+                                    $enrollment_info['disclaimer_form'] =
+                                        $this->storeBeneficiaryImage(
+                                            $enrollment_info['disclaimer_form'],
+                                            $beneficiary_id,
+                                            $school_id,
+                                            'consentforms',
+                                            3
+                                        );
+                                }
+
+                                $enrollment_info['images_converted'] = 1;
+
+                                //Prepare enrollment data
+                                $enrollment_data = array_merge($enrollment_info, [
+
+                                    'school_id' => $school_id,
+
+                                    'in_workflow' => $enrollment_info['in_workflow'] ?? 0,
+                                    'batch_id' => $enrollment_info['batch_id'] ?? 0,
+                                    'batch_no' => $enrollment_info['batch_no'] ?? null,
+                                    'beneficiary_schoolstatus_id' => $enrollment_info['beneficiary_schoolstatus_id'] ?? 0,
+
+                                    'updated_at' => now(),
+                                    'updated_by' => $sender_id,
+
+                                    'prevrecord_id' => $enrollment_info['prevrecord_id'] ?? 0,
+                                    'images_converted' => $enrollment_info['images_converted'] ?? 0,
+
+                                    'created_at' => now(),
+                                    'created_by' => $sender_id,
+                                ]);
+
+                                $columns = array_keys($enrollment_data);
+                                $values = array_values($enrollment_data);
+
+                                $placeholders = array_fill(0, count($values), '?');
+
+                                $columnList = implode(',', array_map(function ($col) {
+                                    return "`{$col}`";
+                                }, $columns));
+
+                                $updateClauses = [];
+
+                                foreach ($columns as $col) {
+
+                                    if ($col !== 'id' && $col !== 'beneficiary_id' && $col !== 'school_id') {
+                                        $updateClauses[] = "`{$col}` = VALUES(`{$col}`)";
+                                    }
+                                }
+
+                                $sql = "INSERT INTO beneficiary_payresponses_staging_clone (" .
+                                    $columnList .
+                                    ") VALUES (" .
+                                    implode(',', $placeholders) .
+                                    ") ON DUPLICATE KEY UPDATE " .
+                                    implode(',', $updateClauses);
+
+                                $rowCount = DB::affectingStatement($sql, $values);
+
+                                if ($rowCount == 1) {
+
+                                    $insertedCount++;
+                                    $syncCount++;
+
+                                    Log::info("Inserted enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
+
+                                } elseif ($rowCount == 2) {
+
+                                    $updatedCount++;
+                                    $syncCount++;
+
+                                    Log::info("Updated enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
+
+                                } else {
+
+                                    Log::warning("No changes for enrollment of beneficiary: {$beneficiary_id}, school: {$school_id}");
+                                }
+
+                            } catch (\Exception $e) {
+
+                                Log::error("Error processing enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
+                                Log::error("Beneficiary ID: " . ($enrollment_info['beneficiary_id'] ?? 'unknown'));
+                                Log::error("Error: " . $e->getMessage());
+                            }
+                        }
+                    }
+
+                    //PROCESS FEES
+                    if ($fees_info_array && is_array($fees_info_array)) {
+
+                        try {
+
+                            $beneficiaryIds = array_filter(array_map(function ($enrollment) {
+                                return $enrollment['beneficiary_id'] ?? null;
+                            }, $enrollment_info_array ?? []));
+
+                            if (!empty($beneficiaryIds)) {
+
+                                DB::table('beneficiary_fees_staging')
+                                    ->where('school_id', $school_id)
+                                    ->whereIn('beneficiary_id', $beneficiaryIds)
+                                    ->delete();
+                            }
+
+                            foreach ($fees_info_array as $feeIndex => $fee_info) {
+
+                                if (!is_array($fee_info) || empty($fee_info)) {
+                                    Log::warning("Skipping invalid fee at school index {$schoolIndex}, fee index {$feeIndex}");
+                                    continue;
+                                }
+
+                                unset($fee_info['id']);
+
+                                if (count($fee_info) > 0) {
+                                    DB::table('beneficiary_fees_staging')->insert($fee_info);
+                                }
+                            }
+
+                            Log::info("Processed fees for school_id: {$school_id}");
+
+                        } catch (\Exception $e) {
+
+                            Log::error("Error processing fees for school_id {$school_id}: " . $e->getMessage());
+                        }
+                    }
+
+                    //PROCESS META INFO
+                    if ($meta_info && is_array($meta_info) && count($meta_info) > 0) {
+
+                        try {
+
+                            $meta_info['school_id'] = $school_id;
+
+                            DB::table('beneficiary_metainfo_staging')
+                                ->updateOrInsert(
+                                    ['school_id' => $school_id],
+                                    $meta_info
+                                );
+
+                        } catch (\Exception $e) {
+
+                            Log::error("Error processing meta info for school_id {$school_id}: " . $e->getMessage());
+                        }
+                    }
+                }
+
+                $messageParts = [];
+
+                if ($insertedCount > 0) $messageParts[] = "{$insertedCount} inserted";
+                if ($updatedCount > 0) $messageParts[] = "{$updatedCount} updated";
+                if ($syncCount > 0) $messageParts[] = "{$syncCount} total synced";
+
+                $res = [
+                    'success' => true,
+                    'message' => count($messageParts) > 0
+                        ? 'Sync complete: ' . implode(', ', $messageParts)
+                        : 'Sync Info Received (no changes)',
+                    'syncCount' => $syncCount
+                ];
+
+            } else {
+
+                $res = [
+                    'success' => false,
+                    'message' => 'Empty Sync Request',
+                    'syncCount' => $syncCount
+                ];
+            }
+
+            Log::info("Process complete: " . json_encode($res));
+
+        } catch (\Exception $e) {
+
+            Log::error("Error occurred: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString());
+
+            $res = [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'syncCount' => $syncCount
+            ];
+        }
+
+        return response()->json($res);
+    }
+
     public function convertExistingImagesOld()
     {
         $limit = 50;
 
-        $records = DB::table('beneficiary_payresponses_staging')
+        $records = DB::table('beneficiary_payresponses_staging_clone')
             ->where('images_converted', 0)
             ->limit($limit)
             ->get();
@@ -3244,14 +3365,14 @@ class ParametersController extends BaseController
 
             $update['images_converted'] = 1;
 
-            DB::table('beneficiary_payresponses_staging')
+            DB::table('beneficiary_payresponses_staging_clone')
                 ->where('id', $row->id)
                 ->update($update);
 
             $converted++;
         }
 
-        $remaining = DB::table('beneficiary_payresponses_staging')
+        $remaining = DB::table('beneficiary_payresponses_staging_clone')
             ->where('images_converted', 0)
             ->count();
 
@@ -3273,10 +3394,12 @@ class ParametersController extends BaseController
 
         try {
 
-            $record = DB::table('beneficiary_payresponses_staging')
+            //Fetch one pending record that still contains base64 images
+            $record = DB::table('beneficiary_payresponses_staging_clone')
                 ->select(
                     'id',
                     'beneficiary_id',
+                    'school_id',
                     'beneficiary_image',
                     'signature',
                     'disclaimer_form'
@@ -3287,6 +3410,7 @@ class ParametersController extends BaseController
                 ->limit(1)
                 ->first();
 
+            //Stop execution if no pending record exists
             if (!$record) {
 
                 $logs[] = "No pending records found";
@@ -3299,52 +3423,44 @@ class ParametersController extends BaseController
             }
 
             $beneficiaryId = $record->beneficiary_id;
-            $update = [];
+            $schoolId = $record->school_id;
 
             $logs[] = "Processing record ID {$record->id}";
             $logs[] = "Beneficiary {$beneficiaryId}";
 
-            // Convert beneficiary image
-            if (!empty($record->beneficiary_image) && strlen($record->beneficiary_image) > 200) {
+            //Convert beneficiary image and store reference
+            $this->storeBeneficiaryImage(
+                $record->beneficiary_image,
+                $beneficiaryId,
+                $schoolId,
+                'images',
+                1
+            );
 
-                $logs[] = "Converting beneficiary image";
+            //Convert signature image and store reference
+            $this->storeBeneficiaryImage(
+                $record->signature,
+                $beneficiaryId,
+                $schoolId,
+                'signature',
+                2
+            );
 
-                $update['beneficiary_image'] = $this->saveBase64Image(
-                    $record->beneficiary_image,
-                    'beneficiaryimages',
-                    $beneficiaryId
-                );
-            }
+            //Convert disclaimer form image and store reference
+            $this->storeBeneficiaryImage(
+                $record->disclaimer_form,
+                $beneficiaryId,
+                $schoolId,
+                'consentforms',
+                3
+            );
 
-            // Convert signature
-            if (!empty($record->signature) && strlen($record->signature) > 200) {
-
-                $logs[] = "Converting signature";
-
-                $update['signature'] = $this->saveBase64Image(
-                    $record->signature,
-                    'signatureimages',
-                    $beneficiaryId
-                );
-            }
-
-            // Convert disclaimer form
-            if (!empty($record->disclaimer_form) && strlen($record->disclaimer_form) > 200) {
-
-                $logs[] = "Converting disclaimer form";
-
-                $update['disclaimer_form'] = $this->saveBase64Image(
-                    $record->disclaimer_form,
-                    'disclaimerforms',
-                    $beneficiaryId
-                );
-            }
-
-            $update['images_converted'] = 1;
-
-            DB::table('beneficiary_payresponses_staging')
+            //Mark the record as converted so it will not be processed again
+            DB::table('beneficiary_payresponses_staging_clone')
                 ->where('id', $record->id)
-                ->update($update);
+                ->update([
+                    'images_converted' => 1
+                ]);
 
             $endTime = microtime(true);
             $executionTime = round($endTime - $startTime, 2);
@@ -3413,7 +3529,7 @@ class ParametersController extends BaseController
 
                 //Fetch the next batch of pending records that contain base64 images
                 //Using id > lastId prevents the database from repeatedly scanning the table
-                $records = DB::table('beneficiary_payresponses_staging')
+                $records = DB::table('beneficiary_payresponses_staging_clone')
                     ->select(
                         'id',
                         'beneficiary_id',
@@ -3501,7 +3617,7 @@ class ParametersController extends BaseController
                     }
 
                     //Mark the original staging record as converted to prevent reprocessing
-                    DB::table('beneficiary_payresponses_staging')
+                    DB::table('beneficiary_payresponses_staging_clone')
                         ->where('id', $record->id)
                         ->update([
                             'images_converted' => 1
@@ -3515,7 +3631,7 @@ class ParametersController extends BaseController
                 //Log progress every ten loops to monitor migration status
                 if ($loop % 10 == 0) {
 
-                    $remaining = DB::table('beneficiary_payresponses_staging')
+                    $remaining = DB::table('beneficiary_payresponses_staging_clone')
                         ->where('verification_status', 'pending')
                         ->where('images_converted', 0)
                         ->count();
@@ -3557,6 +3673,32 @@ class ParametersController extends BaseController
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    private function storeBeneficiaryImage($base64Image, $beneficiaryId, $schoolId, $folder, $imageType)
+    {
+        //Skip empty images
+        if (empty($base64Image) || strlen($base64Image) <= 200) {
+            return null;
+        }
+
+        //Convert base64 image to file and get file path
+        $path = $this->saveBase64Image(
+            $base64Image,
+            $folder,
+            $beneficiaryId
+        );
+
+        //Insert the stored image path into beneficiary_images_staging
+        DB::table('beneficiary_images_staging')->insert([
+            'image_name' => $path,
+            'beneficiary_id' => $beneficiaryId,
+            'image_type' => $imageType,
+            'school_id' => $schoolId,
+            'created_at' => now()
+        ]);
+
+        return $path;
     }
 
     public function getMobileTableParams($table_name)
@@ -3777,7 +3919,7 @@ class ParametersController extends BaseController
             $recommendation = 1;
             $qry = DB::table('beneficiary_information as t1')
                 ->join('school_information as t2','t1.school_id', '=', 't2.id')
-                ->leftJoin('beneficiary_payresponses_staging as t3', 't1.id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't1.id', '=', 't3.id')
                 ->select('t1.id','t1.beneficiary_id','t1.household_id',
                     't1.exam_school_id','t1.school_id','t1.cwac_id',
                     't1.acc_id','t1.ward_id','t1.constituency_id',
@@ -3797,7 +3939,7 @@ class ParametersController extends BaseController
                 ->where('t1.verification_recommendation', 1);
             $count_qry = DB::table('beneficiary_information as t1')
                 ->join('school_information as t2','t1.school_id', '=', 't2.id')
-                ->leftJoin('beneficiary_payresponses_staging as t3', 't1.id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't1.id', '=', 't3.id')
                 ->selectRaw('COUNT(t1.id) as id_count')
                 ->where('t1.beneficiary_status', 4)
                 ->where('t1.is_checklist_verified', 0)
@@ -3999,7 +4141,7 @@ class ParametersController extends BaseController
         $total_in_batch = $req->input('total_in_batch');
         $results = $req->input('results');
         $skippedRecords = [];
-        // if (DB::table('beneficiary_payresponses_staging')->where('school_id', $school_id)->exists()) {
+        // if (DB::table('beneficiary_payresponses_staging_clone')->where('school_id', $school_id)->exists()) {
         //                         $skippedRecords[] = $school_id;
         //                         continue;
         //                     }
@@ -5168,7 +5310,7 @@ class ParametersController extends BaseController
                     t2.name as school_name,t2.code as emis_code,t9.witness_name,t10.batch_no,t9.head_mobile as headteacher_tel_no,
                     t3.name as district_name,t6.name as province_name,t9.in_workflow,t9.full_names as school_headteacher,
                     (
-                        SELECT COUNT(t11.id) FROM beneficiary_payresponses_staging t11 
+                        SELECT COUNT(t11.id) FROM beneficiary_payresponses_staging_clone t11 
                         WHERE " . ($is_verified == 1 ? ("t11.verification_status = 'pending'") : 
                         (" (t11.verification_status = 'marked_for_transfer' OR t11.verification_status = 'unavailable')"
                         )) . " AND t11.school_id = t9.school_id
@@ -5187,7 +5329,7 @@ class ParametersController extends BaseController
                 // ->leftJoin('users as t8', 't1.created_by', '=', 't8.id')
                 ->leftJoin('school_bankinformation as sbi', 't9.school_id', '=', 'sbi.school_id')
                 ->leftJoin('bank_details as bd', 'sbi.bank_id', '=', 'bd.id')
-                ->leftJoin('beneficiary_payresponses_staging as t1', 't9.school_id', '=', 't1.school_id');
+                ->leftJoin('beneficiary_payresponses_staging_clone as t1', 't9.school_id', '=', 't1.school_id');
             if (isset($year) && $year != '') {
                 $qry->whereRaw("YEAR(t9.created_at)=".$year);
             }
@@ -5248,7 +5390,7 @@ class ParametersController extends BaseController
                     s1.beneficiary_id,
                     s1.school_id,
                     s1.school_transfered_to
-                FROM beneficiary_payresponses_staging s1
+                FROM beneficiary_payresponses_staging_clone s1
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
             ", [$date]);
@@ -5257,7 +5399,7 @@ class ParametersController extends BaseController
             // Update beneficiary school
             DB::statement("
                 UPDATE beneficiary_information t1
-                INNER JOIN beneficiary_payresponses_staging s1
+                INNER JOIN beneficiary_payresponses_staging_clone s1
                     ON t1.beneficiary_id = s1.beneficiary_id
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
@@ -5267,7 +5409,7 @@ class ParametersController extends BaseController
 
             // Delete processed staging records
             DB::statement("
-                DELETE FROM beneficiary_payresponses_staging
+                DELETE FROM beneficiary_payresponses_staging_clone
                 WHERE DATETIME >= ?
                 AND is_transfered = 1
             ", [$date]);
@@ -5306,7 +5448,7 @@ class ParametersController extends BaseController
             $createdBy = auth()->user()->id ?? 'system';
 
             // COUNT RECORDS
-            $recordsToProcess = DB::table('beneficiary_payresponses_staging')
+            $recordsToProcess = DB::table('beneficiary_payresponses_staging_clone')
                 ->where('DATETIME', '>=', $date)
                 ->where('is_transfered', 1)
                 ->count();
@@ -5324,7 +5466,7 @@ class ParametersController extends BaseController
                     s1.school_transfered_to,
                     NOW(),
                     ?
-                FROM beneficiary_payresponses_staging s1
+                FROM beneficiary_payresponses_staging_clone s1
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
             ", [$createdBy, $date]);
@@ -5337,7 +5479,7 @@ class ParametersController extends BaseController
             // UPDATE BENEFICIARY SCHOOL
             $updatedCount = DB::affectingStatement("
                 UPDATE beneficiary_information t1
-                INNER JOIN beneficiary_payresponses_staging s1
+                INNER JOIN beneficiary_payresponses_staging_clone s1
                     ON t1.beneficiary_id = s1.beneficiary_id
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
@@ -5352,7 +5494,7 @@ class ParametersController extends BaseController
 
             // DELETE STAGING RECORDS
             $deletedCount = DB::affectingStatement("
-                DELETE FROM beneficiary_payresponses_staging
+                DELETE FROM beneficiary_payresponses_staging_clone
                 WHERE DATETIME >= ?
                 AND is_transfered = 1
             ", [$date]);
@@ -5415,7 +5557,7 @@ class ParametersController extends BaseController
             do {
 
                 // Fetch batch of beneficiary_ids
-                $ids = DB::table('beneficiary_payresponses_staging')
+                $ids = DB::table('beneficiary_payresponses_staging_clone')
                     ->where('DATETIME', '>=', $date)
                     ->limit($batchSize)
                     ->pluck('beneficiary_id')
@@ -5499,7 +5641,7 @@ class ParametersController extends BaseController
     {
         $limit = 100;
 
-        $records = DB::table('beneficiary_payresponses_staging')
+        $records = DB::table('beneficiary_payresponses_staging_clone')
             ->select('id','beneficiary_image','signature','disclaimer_form')
             ->where('images_converted',1)
             ->limit($limit)
@@ -5564,7 +5706,7 @@ class ParametersController extends BaseController
 
             if (!empty($update)) {
 
-                DB::table('beneficiary_payresponses_staging')
+                DB::table('beneficiary_payresponses_staging_clone')
                     ->where('id',$row->id)
                     ->update($update);
 
