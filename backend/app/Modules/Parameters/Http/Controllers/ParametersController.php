@@ -2728,7 +2728,7 @@ class ParametersController extends BaseController
                 throw new \Exception("Empty base64 image provided");
             }
 
-            // Remove header if present
+            //Remove header if present
             $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
 
             $imageData = base64_decode($base64Image, true);
@@ -2742,6 +2742,7 @@ class ParametersController extends BaseController
 
             $fileName = "img{$beneficiaryId}_{$year}_{$month}_" . uniqid() . ".jpg";
 
+            //Actual physical directory where image is stored
             $directory = public_path("img/{$folder}");
 
             if (!is_dir($directory)) {
@@ -2758,7 +2759,8 @@ class ParametersController extends BaseController
                 throw new \Exception("Failed to write image to disk: {$filePath}");
             }
 
-            return "{$folder}/{$fileName}";
+            //Return path including backend/public/img prefix
+            return "backend/public/img/{$folder}/{$fileName}";
 
         } catch (\Exception $e) {
 
