@@ -1359,7 +1359,7 @@ class Parameters extends Controller
             $post_data = $req->all();   
             $batch_id = isset($post_data['batch_id']) ? $post_data['batch_id'] : null;
             $school_id = isset($post_data['school_id']) ? $post_data['school_id'] : null;           
-            $responses = DB::table('beneficiary_payresponses_staging as t1')
+            $responses = DB::table('beneficiary_payresponses_staging_clone as t1')
                 ->select('t1.responses','t1.id','t1.resps_inserted','t1.is_gce_external_candidate',
                     't1.confirmed_grade','t1.exam_fees')
                 ->where(array('t1.school_id' => $school_id))
@@ -1467,7 +1467,7 @@ class Parameters extends Controller
                                         }
                                     }
                                     if($update_array) {
-                                        DB::table('beneficiary_payresponses_staging')
+                                        DB::table('beneficiary_payresponses_staging_clone')
                                             ->where('id', $record_id)
                                             ->update($update_array);
                                     }
@@ -1490,9 +1490,9 @@ class Parameters extends Controller
                     't5.wb_facility_manager_id','t5.has_signed_consent','t5.has_signed_disclaimer','t5.is_gce_external_candidate')
                 ->leftJoin('school_information as t3', 't1.school_id', '=', 't3.id')
                 ->leftJoin('districts as t4', 't1.district_id', '=', 't4.id')
-                ->leftJoin('beneficiary_payresponses_staging as t5', 't1.id', '=', 't5.id');
+                ->leftJoin('beneficiary_payresponses_staging_clone as t5', 't1.id', '=', 't5.id');
             if(validateisNumeric($school_id)) {
-                $id_qry = DB::table('beneficiary_payresponses_staging as t1')
+                $id_qry = DB::table('beneficiary_payresponses_staging_clone as t1')
                     ->select('t1.id')
                     ->where(array(
                         'school_id' => $school_id,
