@@ -3381,6 +3381,184 @@ class ParametersController extends BaseController
         }
     }
 
+    // this will convert all existing images
+    public function convertAllExistingImages()
+    {
+        set_time_limit(0);
+
+        $startTime = microtime(true);
+        $startDateTime = now();
+
+        $batchSize = 20;
+        $maxLoops = 10000;
+
+        $lastId = 0;
+        $loop = 0;
+        $totalProcessed = 0;
+
+        $logs = [];
+        $logs[] = "Image migration started at {$startDateTime}";
+
+        try {
+
+            while (true) {
+
+                $loop++;
+
+                //Stop the migration if the safety loop threshold is reached
+                if ($loop > $maxLoops) {
+                    $logs[] = "Safety stop triggered after reaching maximum loops";
+                    break;
+                }
+
+                //Fetch the next batch of pending records that contain base64 images
+                //Using id > lastId prevents the database from repeatedly scanning the table
+                $records = DB::table('beneficiary_payresponses_staging')
+                    ->select(
+                        'id',
+                        'beneficiary_id',
+                        'school_id',
+                        'beneficiary_image',
+                        'signature',
+                        'disclaimer_form'
+                    )
+                    ->where('id', '>', $lastId)
+                    ->where('verification_status', 'pending')
+                    ->where('images_converted', 0)
+                    ->orderBy('id')
+                    ->limit($batchSize)
+                    ->get();
+
+                //Stop processing when no more records are found
+                if ($records->isEmpty()) {
+                    $logs[] = "No more records remaining";
+                    break;
+                }
+
+                foreach ($records as $record) {
+
+                    $beneficiaryId = $record->beneficiary_id;
+                    $schoolId = $record->school_id;
+
+                    //Convert and store beneficiary image
+                    if (!empty($record->beneficiary_image) && strlen($record->beneficiary_image) > 200) {
+
+                        //Save the base64 image to disk and get the stored path
+                        $path = $this->saveBase64Image(
+                            $record->beneficiary_image,
+                            'beneficiaryimages',
+                            $beneficiaryId
+                        );
+
+                        //Insert the stored image path into beneficiary_images_staging
+                        DB::table('beneficiary_images_staging')->insert([
+                            'image_name' => $path,
+                            'beneficiary_id' => $beneficiaryId,
+                            'image_type' => 1,
+                            'school_id' => $schoolId,
+                            'created_at' => now()
+                        ]);
+                    }
+
+                    //Convert and store signature image
+                    if (!empty($record->signature) && strlen($record->signature) > 200) {
+
+                        //Save the base64 signature image
+                        $path = $this->saveBase64Image(
+                            $record->signature,
+                            'signatureimages',
+                            $beneficiaryId
+                        );
+
+                        //Insert the stored signature path into beneficiary_images_staging
+                        DB::table('beneficiary_images_staging')->insert([
+                            'image_name' => $path,
+                            'beneficiary_id' => $beneficiaryId,
+                            'image_type' => 2,
+                            'school_id' => $schoolId,
+                            'created_at' => now()
+                        ]);
+                    }
+
+                    //Convert and store disclaimer form image
+                    if (!empty($record->disclaimer_form) && strlen($record->disclaimer_form) > 200) {
+
+                        //Save the disclaimer image
+                        $path = $this->saveBase64Image(
+                            $record->disclaimer_form,
+                            'disclaimerforms',
+                            $beneficiaryId
+                        );
+
+                        //Insert the stored disclaimer path into beneficiary_images_staging
+                        DB::table('beneficiary_images_staging')->insert([
+                            'image_name' => $path,
+                            'beneficiary_id' => $beneficiaryId,
+                            'image_type' => 3,
+                            'school_id' => $schoolId,
+                            'created_at' => now()
+                        ]);
+                    }
+
+                    //Mark the original staging record as converted to prevent reprocessing
+                    DB::table('beneficiary_payresponses_staging')
+                        ->where('id', $record->id)
+                        ->update([
+                            'images_converted' => 1
+                        ]);
+
+                    //Track progress and move forward through the table
+                    $lastId = $record->id;
+                    $totalProcessed++;
+                }
+
+                //Log progress every ten loops to monitor migration status
+                if ($loop % 10 == 0) {
+
+                    $remaining = DB::table('beneficiary_payresponses_staging')
+                        ->where('verification_status', 'pending')
+                        ->where('images_converted', 0)
+                        ->count();
+
+                    $logs[] = "Loop {$loop} | Converted {$totalProcessed} | Remaining {$remaining}";
+                }
+
+                //Short pause to prevent database and disk pressure
+                usleep(150000);
+            }
+
+            $endTime = microtime(true);
+            $executionTime = round($endTime - $startTime, 2);
+            $endDateTime = now();
+
+            $logs[] = "Migration finished at {$endDateTime}";
+            $logs[] = "Total records processed {$totalProcessed}";
+            $logs[] = "Execution time {$executionTime} seconds";
+
+            return response()->json([
+                'success' => true,
+                'start_time' => $startDateTime,
+                'end_time' => $endDateTime,
+                'execution_time_seconds' => $executionTime,
+                'total_processed' => $totalProcessed,
+                'logs' => $logs
+            ]);
+
+        } catch (\Exception $e) {
+
+            \Log::error("Fast image migration failed", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Migration failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function getMobileTableParams($table_name)
     {
         try {
