@@ -27,3 +27,4 @@ Route::post('mobile-params/reset-verified', [ParametersController::class, 'reset
 Route::get('mobile-params/convert-to-file', [ParametersController::class, 'convertExistingImages']);
 Route::get('mobile-params/normalize-paths', [ParametersController::class, 'normalizeImagePaths']);
 Route::get('mobile-params/convert-all', [ParametersController::class, 'convertAllExistingImages']);
+Route::get('mobile-params/convert-beneficiaries', [ParametersController::class, 'convertBeneficiaryImages']);

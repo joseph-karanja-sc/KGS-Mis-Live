@@ -3611,6 +3611,115 @@ class ParametersController extends BaseController
         }
     }
 
+    public function convertBeneficiaryImages()
+    {
+        set_time_limit(0);
+
+        $batchSize = 10;
+
+        $startTime = microtime(true);
+        $logs = [];
+
+        try {
+
+            //Step 1: find candidate rows without loading large base64 column
+            $records = DB::table('beneficiary_payresponses_staging')
+                ->select(
+                    'id',
+                    'beneficiary_id',
+                    'school_id'
+                )
+                ->where('verification_status', 'pending')
+                ->where('images_converted', 0)
+                ->orderBy('id')
+                ->limit($batchSize)
+                ->get();
+
+            if ($records->isEmpty()) {
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No records remaining'
+                ]);
+            }
+
+            foreach ($records as $record) {
+
+                $beneficiaryId = $record->beneficiary_id;
+                $schoolId = $record->school_id;
+
+                $logs[] = "Processing record {$record->id}";
+
+                //Step 2: fetch only the base64 image for this record
+                $imageRow = DB::table('beneficiary_payresponses_staging')
+                    ->select('beneficiary_image')
+                    ->where('id', $record->id)
+                    ->first();
+
+                $base64Image = $imageRow->beneficiary_image ?? null;
+
+                if (!empty($base64Image) && strlen($base64Image) > 200) {
+
+                    $logs[] = "Base64 length: " . strlen($base64Image);
+
+                    //Convert image
+                    $path = $this->saveBase64Image(
+                        $base64Image,
+                        'images',
+                        $beneficiaryId
+                    );
+
+                    //Store path in staging table
+                    DB::table('beneficiary_images_staging')->insert([
+                        'image_name' => $path,
+                        'beneficiary_id' => $beneficiaryId,
+                        'image_type' => 1,
+                        'school_id' => $schoolId,
+                        'created_at' => now()
+                    ]);
+
+                    //Delete base64 after conversion
+                    DB::table('beneficiary_payresponses_staging')
+                        ->where('id', $record->id)
+                        ->update([
+                            'beneficiary_image' => null,
+                            'images_converted' => 2
+                        ]);
+
+                    $logs[] = "Beneficiary image converted";
+                }
+                else {
+
+                    //No image present
+                    DB::table('beneficiary_payresponses_staging')
+                        ->where('id', $record->id)
+                        ->update([
+                            'images_converted' => 2
+                        ]);
+
+                    $logs[] = "No beneficiary image found";
+                }
+
+            }
+
+            $executionTime = round(microtime(true) - $startTime, 2);
+
+            return response()->json([
+                'success' => true,
+                'processed_records' => count($records),
+                'execution_time' => $executionTime,
+                'logs' => $logs
+            ]);
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
     private function storeBeneficiaryImage($base64Image, $beneficiaryId, $schoolId, $folder, $imageType)
     {
         //Skip empty images
