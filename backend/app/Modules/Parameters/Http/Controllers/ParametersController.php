@@ -5925,4 +5925,142 @@ class ParametersController extends BaseController
         }
     }
 
+    /**
+     * Return batch to re-capture - deletes all staged data for the entire batch
+     * This affects the whole school since it returns the entire batch
+     */
+    public function returnBatchToRecapture(Request $req)
+    {
+        try {
+            $user_id = $this->user_id;
+            $groups = getUserGroups($user_id);
+            $superUserID = getSuperUserGroupId();
+            $isSuperUser = in_array($superUserID, $groups);
+            
+            if (!$isSuperUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied. Only superusers can perform this action.'
+                ]);
+            }
+
+            $batch_id = $req->input('batch_id');
+            $batch_no = $req->input('batch_no');
+            $school_id = $req->input('school_id');
+
+            if (!$batch_id || !$school_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Batch ID and School ID are required'
+                ]);
+            }
+
+            Log::info("Returning batch to re-capture - Batch ID: {$batch_id}, School ID: {$school_id}");
+
+            // Get all beneficiary IDs in this batch before deleting
+            $beneficiaryIds = DB::table('beneficiary_payresponses_staging')
+                ->where('batch_id', $batch_id)
+                ->where('school_id', $school_id)
+                ->pluck('beneficiary_id')
+                ->toArray();
+
+            // Delete from beneficiary_images_staging
+            DB::table('beneficiary_images_staging')
+                ->where('school_id', $school_id)
+                ->whereIn('beneficiary_id', $beneficiaryIds)
+                ->delete();
+
+            // Delete from beneficiary_fees_staging
+            DB::table('beneficiary_fees_staging')
+                ->where('school_id', $school_id)
+                ->whereIn('beneficiary_id', $beneficiaryIds)
+                ->delete();
+
+            // Delete from beneficiary_payresponses_staging
+            DB::table('beneficiary_payresponses_staging')
+                ->where('batch_id', $batch_id)
+                ->where('school_id', $school_id)
+                ->delete();
+
+            Log::info("Batch returned to re-capture successfully - Batch ID: {$batch_id}, Beneficiaries count: " . count($beneficiaryIds));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Batch returned to re-capture successfully. All staged data has been deleted.',
+                'deleted_beneficiaries_count' => count($beneficiaryIds)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error returning batch to re-capture: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Return individual beneficiary to re-capture - deletes staged data for one beneficiary
+     */
+    public function returnBeneficiaryToRecapture(Request $req)
+    {
+        try {
+            $user_id = $this->user_id;
+            $groups = getUserGroups($user_id);
+            $superUserID = getSuperUserGroupId();
+            $isSuperUser = in_array($superUserID, $groups);
+            
+            if (!$isSuperUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied. Only superusers can perform this action.'
+                ]);
+            }
+
+            $beneficiary_id = $req->input('beneficiary_id');
+            $school_id = $req->input('school_id');
+
+            if (!$beneficiary_id || !$school_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Beneficiary ID and School ID are required'
+                ]);
+            }
+
+            Log::info("Returning beneficiary to re-capture - Beneficiary ID: {$beneficiary_id}, School ID: {$school_id}");
+
+            // Delete from beneficiary_images_staging
+            DB::table('beneficiary_images_staging')
+                ->where('school_id', $school_id)
+                ->where('beneficiary_id', $beneficiary_id)
+                ->delete();
+
+            // Delete from beneficiary_fees_staging
+            DB::table('beneficiary_fees_staging')
+                ->where('school_id', $school_id)
+                ->where('beneficiary_id', $beneficiary_id)
+                ->delete();
+
+            // Delete from beneficiary_payresponses_staging
+            DB::table('beneficiary_payresponses_staging')
+                ->where('beneficiary_id', $beneficiary_id)
+                ->where('school_id', $school_id)
+                ->delete();
+
+            Log::info("Beneficiary returned to re-capture successfully - Beneficiary ID: {$beneficiary_id}");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Beneficiary returned to re-capture successfully. All staged data has been deleted.'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error returning beneficiary to re-capture: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
+    }
+
 }

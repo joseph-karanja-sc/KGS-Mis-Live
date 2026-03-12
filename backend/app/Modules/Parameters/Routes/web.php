@@ -83,4 +83,7 @@ Route::group(['prefix' => 'mobile_params'], function () {
     Route::post('SyncGrmFormsMobile', 'ParametersController@SyncGrmFormsMobile');
     Route::get('fetch-mis-users', 'ParametersController@getUsersForApp');
     Route::get('update-mis-users', 'ParametersController@updateUsersForApp');
+    // New routes for return to re-capture functionality
+    Route::post('returnBatchToRecapture', 'ParametersController@returnBatchToRecapture');
+    Route::post('returnBeneficiaryToRecapture', 'ParametersController@returnBeneficiaryToRecapture');
 });
