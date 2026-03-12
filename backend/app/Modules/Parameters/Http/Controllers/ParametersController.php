@@ -5952,10 +5952,10 @@ class ParametersController extends BaseController
             $batch_no = $req->input('batch_no');
             $school_id = $req->input('school_id');
 
-            if (!$batch_id || !$school_id) {
+            if (!$school_id) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Batch ID and School ID are required'
+                    'message' => 'School ID is required'
                 ]);
             }
 
@@ -5963,7 +5963,7 @@ class ParametersController extends BaseController
 
             // Get all beneficiary IDs in this batch before deleting
             $beneficiaryIds = DB::table('beneficiary_payresponses_staging')
-                ->where('batch_id', $batch_id)
+                // ->where('batch_id', $batch_id)
                 ->where('school_id', $school_id)
                 ->pluck('beneficiary_id')
                 ->toArray();
@@ -5982,7 +5982,7 @@ class ParametersController extends BaseController
 
             // Delete from beneficiary_payresponses_staging
             DB::table('beneficiary_payresponses_staging')
-                ->where('batch_id', $batch_id)
+                // ->where('batch_id', $batch_id)
                 ->where('school_id', $school_id)
                 ->delete();
 
