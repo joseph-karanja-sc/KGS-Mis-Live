@@ -3611,6 +3611,99 @@ class ParametersController extends BaseController
         }
     }
 
+    public function convertBeneficiaryImages()
+    {
+        set_time_limit(0);
+
+        $batchSize = 1; //increase later
+
+        $startTime = microtime(true);
+        $logs = [];
+
+        try {
+
+            $records = DB::table('beneficiary_payresponses_staging')
+                ->select(
+                    'id',
+                    'beneficiary_id',
+                    'school_id',
+                    'beneficiary_image'
+                )
+                ->where('verification_status', 'pending')
+                ->where('images_converted', 0)
+                ->orderBy('id')
+                ->limit($batchSize)
+                ->get();
+
+            if ($records->isEmpty()) {
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No records remaining'
+                ]);
+            }
+
+            foreach ($records as $record) {
+
+                $beneficiaryId = $record->beneficiary_id;
+                $schoolId = $record->school_id;
+
+                //If base64 exists convert it
+                if (!empty($record->beneficiary_image) && strlen($record->beneficiary_image) > 200) {
+
+                    $path = $this->saveBase64Image(
+                        $record->beneficiary_image,
+                        'images',
+                        $beneficiaryId
+                    );
+
+                    DB::table('beneficiary_images_staging')->insert([
+                        'image_name' => $path,
+                        'beneficiary_id' => $beneficiaryId,
+                        'image_type' => 1,
+                        'school_id' => $schoolId,
+                        'created_at' => now()
+                    ]);
+
+                    //Delete base64 after conversion
+                    DB::table('beneficiary_payresponses_staging')
+                        ->where('id', $record->id)
+                        ->update([
+                            'beneficiary_image' => null,
+                            'images_converted' => 2
+                        ]);
+                }
+                else {
+
+                    //No image present skip conversion
+                    DB::table('beneficiary_payresponses_staging')
+                        ->where('id', $record->id)
+                        ->update([
+                            'images_converted' => 2
+                        ]);
+                }
+
+                $logs[] = "Processed record {$record->id}";
+            }
+
+            $executionTime = round(microtime(true) - $startTime, 2);
+
+            return response()->json([
+                'success' => true,
+                'processed_records' => count($records),
+                'execution_time' => $executionTime,
+                'logs' => $logs
+            ]);
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
     private function storeBeneficiaryImage($base64Image, $beneficiaryId, $schoolId, $folder, $imageType)
     {
         //Skip empty images
