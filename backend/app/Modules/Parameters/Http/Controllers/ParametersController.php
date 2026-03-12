@@ -5932,7 +5932,11 @@ class ParametersController extends BaseController
     public function returnBatchToRecapture(Request $req)
     {
         try {
-            $user_id = $this->user_id;
+            // Check if user is authenticated first
+            if (!Auth::check()) {
+                return response()->json(['error' => 'User not authenticated'], 401);
+            }
+            $user_id = Auth::user()->id;
             $groups = getUserGroups($user_id);
             $superUserID = getSuperUserGroupId();
             $isSuperUser = in_array($superUserID, $groups);
@@ -6005,7 +6009,11 @@ class ParametersController extends BaseController
     public function returnBeneficiaryToRecapture(Request $req)
     {
         try {
-            $user_id = $this->user_id;
+            // Check if user is authenticated first
+            if (!Auth::check()) {
+                return response()->json(['error' => 'User not authenticated'], 401);
+            }
+            $user_id = Auth::user()->id;
             $groups = getUserGroups($user_id);
             $superUserID = getSuperUserGroupId();
             $isSuperUser = in_array($superUserID, $groups);
