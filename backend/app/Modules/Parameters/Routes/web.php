@@ -70,6 +70,9 @@ Route::group(['prefix' => 'parameters'], function () {
         // batch transfer routes
         Route::get('getBatchTransferRecords', 'ParametersController@getBatchTransferRecords');
         Route::post('processBatchTransfer', 'ParametersController@processBatchTransfer');
+        // New routes for return to re-capture functionality
+        Route::post('returnBatchToRecapture', 'ParametersController@returnBatchToRecapture');
+        Route::post('returnBeneficiaryToRecapture', 'ParametersController@returnBeneficiaryToRecapture');
     });
 });
 
@@ -83,7 +86,4 @@ Route::group(['prefix' => 'mobile_params'], function () {
     Route::post('SyncGrmFormsMobile', 'ParametersController@SyncGrmFormsMobile');
     Route::get('fetch-mis-users', 'ParametersController@getUsersForApp');
     Route::get('update-mis-users', 'ParametersController@updateUsersForApp');
-    // New routes for return to re-capture functionality
-    Route::post('returnBatchToRecapture', 'ParametersController@returnBatchToRecapture');
-    Route::post('returnBeneficiaryToRecapture', 'ParametersController@returnBeneficiaryToRecapture');
 });
