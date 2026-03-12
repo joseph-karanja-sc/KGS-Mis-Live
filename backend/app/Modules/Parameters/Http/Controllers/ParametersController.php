@@ -3610,12 +3610,12 @@ class ParametersController extends BaseController
             ], 500);
         }
     }
-    
+
     public function convertBeneficiaryImages()
     {
         set_time_limit(0);
 
-        $batchSize = 1;
+        $batchSize = 10;
 
         $startTime = microtime(true);
         $logs = [];
