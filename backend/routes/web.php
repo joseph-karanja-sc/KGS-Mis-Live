@@ -26,7 +26,7 @@ Route::group(['middleware' => ['web']], function () {
     Route::post('saveNewPassword', 'AuthController@passwordResetHandler');
     Route::post('updatePassword', 'AuthController@updateUserPassword');
     Route::post('getUserAccessLevel', 'AuthController@getUserAccessLevel');
-    route::get('showHelpManual', 'Init@showHelpManual');
+    // route::get('showHelpManual', 'Init@showHelpManual');
     route::get('authenticateUserSession', 'AuthController@authenticateUserSession');
     route::post('reValidateUser', 'AuthController@reValidateUser');
     route::get('createAdminPwd/{username}/{uuid}/{pwd}', 'AuthController@createAdminPwd');
