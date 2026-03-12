@@ -3501,7 +3501,7 @@ class ParametersController extends BaseController
     }
 
     // this will convert all existing images
-    public function convertAllExistingImages()
+    public function convertAllExistingImagesoold()
     {
         set_time_limit(0);
 
@@ -3626,6 +3626,117 @@ class ParametersController extends BaseController
                 'success' => false,
                 'message' => 'Conversion failed',
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+ 
+    // converts 1 record
+    public function convertAllExistingImages()
+    {
+        set_time_limit(0);
+
+        $batchSize = 1;
+
+        $startTime = microtime(true);
+        $startDateTime = now();
+
+        $logs = [];
+        $logs[] = "Conversion started at {$startDateTime}";
+        $logs[] = "Batch size: {$batchSize}";
+
+        try {
+
+            $records = DB::table('beneficiary_payresponses_staging_clone')
+                ->select(
+                    'id',
+                    'beneficiary_id',
+                    'school_id',
+                    'beneficiary_image',
+                    'signature',
+                    'disclaimer_form'
+                )
+                ->where('verification_status', 'pending')
+                ->where('images_converted', 0)
+                ->orderBy('id')
+                ->limit($batchSize)
+                ->get();
+
+            if ($records->isEmpty()) {
+
+                $logs[] = "No pending records found";
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No records remaining',
+                    'logs' => $logs
+                ]);
+            }
+
+            foreach ($records as $record) {
+
+                $beneficiaryId = $record->beneficiary_id;
+                $schoolId = $record->school_id;
+
+                $logs[] = "Processing record ID {$record->id}";
+
+                $this->storeBeneficiaryImage(
+                    $record->beneficiary_image,
+                    $beneficiaryId,
+                    $schoolId,
+                    'images',
+                    1
+                );
+
+                $this->storeBeneficiaryImage(
+                    $record->signature,
+                    $beneficiaryId,
+                    $schoolId,
+                    'signature',
+                    2
+                );
+
+                $this->storeBeneficiaryImage(
+                    $record->disclaimer_form,
+                    $beneficiaryId,
+                    $schoolId,
+                    'consentforms',
+                    3
+                );
+
+                DB::table('beneficiary_payresponses_staging_clone')
+                    ->where('id', $record->id)
+                    ->update([
+                        'images_converted' => 1
+                    ]);
+
+                $logs[] = "Converted record {$record->id}";
+            }
+
+            $endTime = microtime(true);
+            $executionTime = round($endTime - $startTime, 2);
+
+            $logs[] = "Execution time {$executionTime} seconds";
+
+            return response()->json([
+                'success' => true,
+                'processed_records' => count($records),
+                'logs' => $logs
+            ]);
+
+        } catch (\Exception $e) {
+
+            \Log::error("convertAllExistingImages failed", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            $logs[] = "ERROR: " . $e->getMessage();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversion failed',
+                'error' => $e->getMessage(),
+                'logs' => $logs
             ], 500);
         }
     }
