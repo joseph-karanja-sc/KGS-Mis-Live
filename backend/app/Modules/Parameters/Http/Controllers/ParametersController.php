@@ -3610,24 +3610,24 @@ class ParametersController extends BaseController
             ], 500);
         }
     }
-
+    
     public function convertBeneficiaryImages()
     {
         set_time_limit(0);
 
-        $batchSize = 1; //increase later
+        $batchSize = 1;
 
         $startTime = microtime(true);
         $logs = [];
 
         try {
 
+            //Step 1: find candidate rows without loading large base64 column
             $records = DB::table('beneficiary_payresponses_staging')
                 ->select(
                     'id',
                     'beneficiary_id',
-                    'school_id',
-                    'beneficiary_image'
+                    'school_id'
                 )
                 ->where('verification_status', 'pending')
                 ->where('images_converted', 0)
@@ -3648,15 +3648,28 @@ class ParametersController extends BaseController
                 $beneficiaryId = $record->beneficiary_id;
                 $schoolId = $record->school_id;
 
-                //If base64 exists convert it
-                if (!empty($record->beneficiary_image) && strlen($record->beneficiary_image) > 200) {
+                $logs[] = "Processing record {$record->id}";
 
+                //Step 2: fetch only the base64 image for this record
+                $imageRow = DB::table('beneficiary_payresponses_staging')
+                    ->select('beneficiary_image')
+                    ->where('id', $record->id)
+                    ->first();
+
+                $base64Image = $imageRow->beneficiary_image ?? null;
+
+                if (!empty($base64Image) && strlen($base64Image) > 200) {
+
+                    $logs[] = "Base64 length: " . strlen($base64Image);
+
+                    //Convert image
                     $path = $this->saveBase64Image(
-                        $record->beneficiary_image,
+                        $base64Image,
                         'images',
                         $beneficiaryId
                     );
 
+                    //Store path in staging table
                     DB::table('beneficiary_images_staging')->insert([
                         'image_name' => $path,
                         'beneficiary_id' => $beneficiaryId,
@@ -3672,18 +3685,21 @@ class ParametersController extends BaseController
                             'beneficiary_image' => null,
                             'images_converted' => 2
                         ]);
+
+                    $logs[] = "Beneficiary image converted";
                 }
                 else {
 
-                    //No image present skip conversion
+                    //No image present
                     DB::table('beneficiary_payresponses_staging')
                         ->where('id', $record->id)
                         ->update([
                             'images_converted' => 2
                         ]);
+
+                    $logs[] = "No beneficiary image found";
                 }
 
-                $logs[] = "Processed record {$record->id}";
             }
 
             $executionTime = round(microtime(true) - $startTime, 2);
