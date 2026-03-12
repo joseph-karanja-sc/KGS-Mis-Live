@@ -67,6 +67,9 @@ Route::group(['prefix' => 'parameters'], function () {
         Route::get('getCwacDropdowns', 'ParametersController@getCwacDropdowns');
         Route::get('getProvinces', 'ParametersController@getProvinces');
         Route::post('saveSchoolBankApprovalInfo', 'ParametersController@saveSchoolBankApprovalInfo');
+        // batch transfer routes
+        Route::get('getBatchTransferRecords', 'ParametersController@getBatchTransferRecords');
+        Route::post('processBatchTransfer', 'ParametersController@processBatchTransfer');
     });
 });
 
