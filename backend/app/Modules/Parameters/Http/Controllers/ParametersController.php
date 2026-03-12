@@ -3505,7 +3505,7 @@ class ParametersController extends BaseController
     {
         set_time_limit(0);
 
-        $batchSize = 1;
+        $batchSize = 5;
 
         $startTime = microtime(true);
         $startDateTime = now();
