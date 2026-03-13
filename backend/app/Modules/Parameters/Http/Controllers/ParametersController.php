@@ -2506,7 +2506,7 @@ class ParametersController extends BaseController
         }
     }
     
-     public function getSyncedUploadData(Request $req)
+     public function getSyncedUploadDataOld(Request $req)
     {
         try {
             $post_data = $req->all();
@@ -2627,6 +2627,82 @@ class ParametersController extends BaseController
                 'message' => $throwable->getMessage()
             );
         }
+        return response()->json($res);
+    }
+
+    //updated to stop converting base 64 to filepath and just return converted images
+    public function getSyncedUploadData(Request $req)
+    {
+        try {
+
+            $post_data = $req->all();
+            $school_id = $post_data['school_id'] ?? null;
+
+            $qry = DB::table('beneficiary_payresponses_staging_clone as t1')
+                ->selectRaw('t1.id,t1.signature,t1.beneficiary_image,t1.disclaimer_form,t1.images_converted');
+
+            if ($school_id) {
+                $qry->where('t1.school_id', $school_id);
+            }
+
+            $qry->whereRaw("t1.verification_status = 'pending' AND t1.is_enrolled = 1");
+
+            $results = $qry->get();
+
+
+            /*
+            Conversion block removed.
+            We now only rely on images_converted already stored in DB.
+            */
+
+
+            $fin_qry = DB::table('beneficiary_uploadfiles_staging as t1')
+                ->leftJoin('beneficiary_images_staging as t2', 't2.image_type', '=', 't1.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.id')
+                ->selectRaw('
+                    t2.id,
+                    t2.beneficiary_id,
+                    t2.image_type,
+                    t2.school_id,
+                    t1.file_name as image_name,
+                    t2.image_name as image_file,
+                    t2.image_name as image_view,
+                    CONCAT(t3.first_name," ",t3.surname) AS full_name,
+                    t3.id as ben_id,
+                    "Image-PNG" as file_type
+                ');
+
+            if ($school_id) {
+                $fin_qry->where('t2.school_id', $school_id);
+            }
+
+            $fin_qry->whereRaw("t3.verification_status = 'pending'")
+                ->groupBy('t2.beneficiary_id', 'image_type');
+
+            $fin_results = $fin_qry->get();
+
+
+            $res = [
+                'success' => true,
+                'results' => $fin_results,
+                'message' => 'All is well'
+            ];
+
+        } catch (\Exception $e) {
+
+            $res = [
+                'success' => false,
+                'message' => $e->getMessage()
+            ];
+
+        } catch (\Throwable $throwable) {
+
+            $res = [
+                'success' => false,
+                'message' => $throwable->getMessage()
+            ];
+        }
+
         return response()->json($res);
     }
 
