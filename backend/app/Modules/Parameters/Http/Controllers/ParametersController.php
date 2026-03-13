@@ -5440,7 +5440,7 @@ class ParametersController extends BaseController
                     s1.beneficiary_id,
                     s1.school_id,
                     s1.school_transfered_to
-                FROM beneficiary_payresponses_staging_clone s1
+                FROM beneficiary_payresponses_staging s1
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
             ", [$date]);
@@ -5449,7 +5449,7 @@ class ParametersController extends BaseController
             // Update beneficiary school
             DB::statement("
                 UPDATE beneficiary_information t1
-                INNER JOIN beneficiary_payresponses_staging_clone s1
+                INNER JOIN beneficiary_payresponses_staging s1
                     ON t1.beneficiary_id = s1.beneficiary_id
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
@@ -5459,7 +5459,7 @@ class ParametersController extends BaseController
 
             // Delete processed staging records
             DB::statement("
-                DELETE FROM beneficiary_payresponses_staging_clone
+                DELETE FROM beneficiary_payresponses_staging
                 WHERE DATETIME >= ?
                 AND is_transfered = 1
             ", [$date]);
@@ -5498,7 +5498,7 @@ class ParametersController extends BaseController
             $createdBy = auth()->user()->id ?? 'system';
 
             // COUNT RECORDS
-            $recordsToProcess = DB::table('beneficiary_payresponses_staging_clone')
+            $recordsToProcess = DB::table('beneficiary_payresponses_staging')
                 ->where('DATETIME', '>=', $date)
                 ->where('is_transfered', 1)
                 ->count();
@@ -5516,7 +5516,7 @@ class ParametersController extends BaseController
                     s1.school_transfered_to,
                     NOW(),
                     ?
-                FROM beneficiary_payresponses_staging_clone s1
+                FROM beneficiary_payresponses_staging s1
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
             ", [$createdBy, $date]);
@@ -5529,7 +5529,7 @@ class ParametersController extends BaseController
             // UPDATE BENEFICIARY SCHOOL
             $updatedCount = DB::affectingStatement("
                 UPDATE beneficiary_information t1
-                INNER JOIN beneficiary_payresponses_staging_clone s1
+                INNER JOIN beneficiary_payresponses_staging s1
                     ON t1.beneficiary_id = s1.beneficiary_id
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
@@ -5544,7 +5544,7 @@ class ParametersController extends BaseController
 
             // DELETE STAGING RECORDS
             $deletedCount = DB::affectingStatement("
-                DELETE FROM beneficiary_payresponses_staging_clone
+                DELETE FROM beneficiary_payresponses_staging
                 WHERE DATETIME >= ?
                 AND is_transfered = 1
             ", [$date]);
