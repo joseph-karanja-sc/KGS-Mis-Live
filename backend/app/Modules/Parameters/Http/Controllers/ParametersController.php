@@ -2635,12 +2635,21 @@ class ParametersController extends BaseController
     {
         try {
 
-            $post_data = $req->all();
-            $school_id = $post_data['school_id'] ?? null;
+            $school_id = $req->input('school_id');
+
+            if (!$school_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'school_id is required'
+                ], 400);
+            }
 
             $qry = DB::table('beneficiary_images_staging as t2')
                 ->leftJoin('beneficiary_uploadfiles_staging as t1', 't2.image_type', '=', 't1.id')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.beneficiary_id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t3', function ($join) {
+                    $join->on('t2.beneficiary_id', '=', 't3.beneficiary_id')
+                        ->where('t3.verification_status', 'pending');
+                })
                 ->selectRaw('
                     t2.id,
                     t2.beneficiary_id,
@@ -2652,39 +2661,40 @@ class ParametersController extends BaseController
                     CONCAT(t3.first_name," ",t3.surname) AS full_name,
                     t3.id as ben_id,
                     "Image-PNG" as file_type
-                ');
-
-            if ($school_id) {
-                $qry->where('t2.school_id', $school_id);
-            }
-
-            $qry->where('t3.verification_status', 'pending')
+                ')
+                ->where('t2.school_id', $school_id)
                 ->groupBy('t2.beneficiary_id', 't2.image_type');
 
             $results = $qry->get();
 
-            $res = [
+            if ($results->isEmpty()) {
+
+                return response()->json([
+                    'success' => false,
+                    'results' => [],
+                    'message' => 'No uploaded images found for this school'
+                ], 404);
+            }
+
+            return response()->json([
                 'success' => true,
+                'count' => $results->count(),
                 'results' => $results,
-                'message' => 'All is well'
-            ];
+                'message' => 'Images retrieved successfully'
+            ]);
 
         } catch (\Exception $e) {
 
-            $res = [
-                'success' => false,
-                'message' => $e->getMessage()
-            ];
+            \Log::error('getSyncedUploadData error', [
+                'error' => $e->getMessage(),
+                'school_id' => $req->input('school_id')
+            ]);
 
-        } catch (\Throwable $throwable) {
-
-            $res = [
+            return response()->json([
                 'success' => false,
-                'message' => $throwable->getMessage()
-            ];
+                'message' => 'Server error while retrieving uploaded images'
+            ], 500);
         }
-
-        return response()->json($res);
     }
 
     public function getCwacDropdowns(Request $request)
