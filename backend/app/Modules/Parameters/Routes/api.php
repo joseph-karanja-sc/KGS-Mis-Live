@@ -28,3 +28,4 @@ Route::get('mobile-params/convert-to-file', [ParametersController::class, 'conve
 Route::get('mobile-params/normalize-paths', [ParametersController::class, 'normalizeImagePaths']);
 Route::get('mobile-params/convert-all', [ParametersController::class, 'convertAllExistingImages']);
 Route::get('mobile-params/convert-beneficiaries', [ParametersController::class, 'convertBeneficiaryImages']);
+Route::get('mobile-params/clone-record', [ParametersController::class, 'cloneOneRecord']);

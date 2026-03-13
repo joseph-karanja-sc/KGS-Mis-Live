@@ -6138,4 +6138,114 @@ class ParametersController extends BaseController
         }
     }
 
+    public function cloneOneRecord()
+    {
+        try {
+
+            DB::disableQueryLog();
+
+            $record = DB::table('beneficiary_payresponses_staging')
+                ->select([
+                    'id',
+                    'beneficiary_schoolstatus_id',
+                    'in_workflow',
+                    'batch_id',
+                    'batch_no',
+                    'beneficiary_id',
+                    'school_id',
+                    'first_name',
+                    'address',
+                    'last_name',
+                    'surname',
+                    'home_district',
+                    'verified_dob',
+                    'grade',
+                    'confirmed_grade',
+                    'grm_question_answer',
+                    'responses',
+                    'disclaimer_form_path',
+                    'latitude',
+                    'longitude',
+                    'subjects',
+                    'disclaimer_form_data',
+                    'parent_phone',
+                    'finger_print_path',
+                    'cwac_phone',
+                    'exam_number',
+                    'exam_fees',
+                    'signature_path',
+                    'image_path',
+                    'image_data',
+                    'remarks',
+                    'previous_grade',
+                    'location',
+                    'datetime',
+                    'created_at',
+                    'created_by',
+                    'prevrecord_id',
+                    'updated_at',
+                    'updated_by',
+                    'verification_status',
+                    'is_transfered',
+                    'school_transfered_to',
+                    'transfered_message',
+                    'is_available',
+                    'unavailable_reason_id',
+                    'unavailable_remark',
+                    'is_verified',
+                    'wb_facility_manager_id',
+                    'has_signed_consent',
+                    'has_signed_disclaimer',
+                    'is_gce_external_candidate',
+                    'resps_inserted',
+                    'enrollment_status_id',
+                    'image_url',
+                    'consentform_url',
+                    'term1_fees',
+                    'term2_fees',
+                    'term3_fees',
+                    'annual_fees',
+                    'is_enrolled',
+                    'images_converted',
+                    'transfer_reason_id',
+                    'transfer_remark',
+                    'additional_fee_amount',
+                    'additional_fee_description'
+                ])
+                ->where('id', 257087) // test record
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Record not found'
+                ]);
+            }
+
+            $data = (array) $record;
+
+            // Set Base64 fields to NULL
+            $data['beneficiary_image'] = null;
+            $data['disclaimer_form'] = null;
+            $data['fingerprint'] = null;
+            $data['signature'] = null;
+            $data['signature_url'] = null;
+            $data['consent_form_path'] = null;
+
+            DB::table('beneficiary_payresponses_staging_clone')->insert($data);
+
+            return response()->json([
+                'success' => true,
+                'message' => '1 record cloned successfully'
+            ]);
+
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
 }
