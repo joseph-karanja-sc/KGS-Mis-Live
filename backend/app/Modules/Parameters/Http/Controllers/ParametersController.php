@@ -458,7 +458,12 @@ class ParametersController extends BaseController
                 ->leftJoin('users', 'districts.debs_id', '=', 'users.id')
                 ->select(DB::raw("districts.*, provinces.name as province_name, decrypt(users.first_name) as first_name, decrypt(users.last_name) as last_name,
                              decrypt(users.email) as email, decrypt(users.phone) as phone, decrypt(users.mobile) as mobile,CONCAT_WS('-',districts.code,districts.name) as code_name"));
-            $qry = $province_id == '' ? $qry->whereRaw(1, 1) : $qry->where('districts.province_id', $province_id);
+            // If province_id is provided and not empty
+            if (!empty($province_id)) {
+                $qry->where('districts.province_id', $province_id);
+            }
+            
+            // If only_kgs flag is set
             if (validateisNumeric($only_kgs) && $only_kgs == 1) {
                 $qry->join('kgs_districts as t4', 'districts.id', '=', 't4.district_id');
             }
@@ -5762,6 +5767,308 @@ class ParametersController extends BaseController
         return response()->json([
             'fixed_records' => $fixed
         ]);
+    }
+
+    /**
+     * Get batch transfer records from staging table
+     * Joined with school_information to get district info
+     */
+    public function getBatchTransferRecords(Request $request)
+    {
+        Log::info("getBatchTransferRecords()");
+        Log::info("Fetching batch transfer records with filters", [
+            'district_id' => $request->input('district_id'),
+            'school_search' => $request->input('school_search')
+        ]);
+        try {
+            $district_id = $request->input('district_id');
+            $school_search = $request->input('school_search');
+
+            $query = DB::table('beneficiary_payresponses_staging as t1')
+                ->select([
+                    't1.auto_id',
+                    't1.beneficiary_id',
+                    't1.first_name',
+                    't1.last_name',
+                    't1.surname',
+                    't1.school_id as current_school_id',
+                    't1.school_transfered_to',
+                    't1.grade',
+                    't1.home_district',
+                    't1.datetime',
+                    't1.is_transfered',
+                    't1.transfer_reason_id',
+                    't1.transfer_remark',
+                    'current_school.name as current_school',
+                    'transfer_school.name as school_transfered_to_name',
+                    'districts.name as district_name',
+                    'districts.id as district_id',
+                    'school_transfer_reasons.name as transfer_reason'
+                ])
+                ->leftJoin('school_information as current_school', 't1.school_id', '=', 'current_school.id')
+                ->leftJoin('school_information as transfer_school', 't1.school_transfered_to', '=', 'transfer_school.id')
+                ->leftJoin('districts', 'current_school.district_id', '=', 'districts.id')
+                ->leftJoin('school_transfer_reasons', 't1.transfer_reason_id', '=', 'school_transfer_reasons.id')
+                ->where('t1.is_transfered', 1)
+                ->whereNotNull('t1.school_transfered_to');
+
+            // Apply district filter
+            if ($district_id) {
+                $query->where('current_school.district_id', $district_id);
+            }
+
+            // Apply school search filter
+            if ($school_search) {
+                $query->where(function($q) use ($school_search) {
+                    $q->where('current_school.name', 'like', "%{$school_search}%")
+                      ->orWhere('current_school.code', 'like', "%{$school_search}%")
+                      ->orWhere('transfer_school.name', 'like', "%{$school_search}%");
+                });
+            }
+
+            $records = $query->orderBy('districts.name', 'asc')
+                ->orderBy('t1.beneficiary_id', 'asc')
+                ->get();
+
+            // Format the data for the grid
+            $data = [];
+            foreach ($records as $record) {
+                $data[] = [
+                    'auto_id' => $record->auto_id,
+                    'beneficiary_id' => $record->beneficiary_id,
+                    'first_name' => $record->first_name,
+                    'last_name' => $record->last_name,
+                    'surname' => $record->surname,
+                    'beneficiary_name' => trim($record->first_name . ' ' . $record->last_name . ' ' . $record->surname),
+                    'current_school_id' => $record->current_school_id,
+                    'current_school' => $record->current_school,
+                    'school_transfered_to' => $record->school_transfered_to_name,
+                    'school_transfered_to_id' => $record->school_transfered_to,
+                    'grade' => $record->grade,
+                    'home_district' => $record->home_district,
+                    'district_id' => $record->district_id,
+                    'district_name' => $record->district_name,
+                    'datetime' => $record->datetime,
+                    'transfer_reason' => $record->transfer_reason,
+                    'transfer_remark' => $record->transfer_remark
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'total' => count($data)
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Process batch transfer - update beneficiary school_id and delete staging records
+     */
+    public function processBatchTransfer(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+            // Get all transfer records from staging
+            $stagingRecords = DB::table('beneficiary_payresponses_staging')
+                ->where('is_transfered', 1)
+                ->whereNotNull('school_transfered_to')
+                ->get();
+
+            if ($stagingRecords->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No records to transfer.'
+                ], 400);
+            }
+
+            $transferCount = 0;
+
+            foreach ($stagingRecords as $record) {
+                // 1. Update beneficiary_information school_id
+                DB::table('beneficiary_information')
+                    ->where('beneficiary_id', $record->beneficiary_id)
+                    ->update([
+                        'school_id' => $record->school_transfered_to,
+                        'updated_at' => Carbon::now()
+                    ]);
+
+                // 2. Delete the staging record
+                DB::table('beneficiary_payresponses_staging')
+                    ->where('auto_id', $record->auto_id)
+                    ->delete();
+
+                $transferCount++;
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Batch transfer completed successfully. {$transferCount} beneficiary(ies) transferred."
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Batch transfer failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Return batch to re-capture - deletes all staged data for the entire batch
+     * This affects the whole school since it returns the entire batch
+     */
+    public function returnBatchToRecapture(Request $req)
+    {
+        try {
+            // Check if user is authenticated first
+            if (!Auth::check()) {
+                return response()->json(['error' => 'User not authenticated'], 401);
+            }
+            $user_id = Auth::user()->id;
+            $groups = getUserGroups($user_id);
+            $superUserID = getSuperUserGroupId();
+            $isSuperUser = in_array($superUserID, $groups);
+            
+            if (!$isSuperUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied. Only superusers can perform this action.'
+                ]);
+            }
+
+            $batch_id = $req->input('batch_id');
+            $batch_no = $req->input('batch_no');
+            $school_id = $req->input('school_id');
+
+            if (!$school_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'School ID is required'
+                ]);
+            }
+
+            Log::info("Returning batch to re-capture - Batch ID: {$batch_id}, School ID: {$school_id}");
+
+            // Get all beneficiary IDs in this batch before deleting
+            $beneficiaryIds = DB::table('beneficiary_payresponses_staging')
+                // ->where('batch_id', $batch_id)
+                ->where('school_id', $school_id)
+                ->pluck('beneficiary_id')
+                ->toArray();
+
+            // Delete from beneficiary_images_staging
+            DB::table('beneficiary_images_staging')
+                ->where('school_id', $school_id)
+                ->whereIn('beneficiary_id', $beneficiaryIds)
+                ->delete();
+
+            // Delete from beneficiary_fees_staging
+            DB::table('beneficiary_fees_staging')
+                ->where('school_id', $school_id)
+                ->whereIn('beneficiary_id', $beneficiaryIds)
+                ->delete();
+
+            // Delete from beneficiary_payresponses_staging
+            DB::table('beneficiary_payresponses_staging')
+                // ->where('batch_id', $batch_id)
+                ->where('school_id', $school_id)
+                ->delete();
+
+            Log::info("Batch returned to re-capture successfully - Batch ID: {$batch_id}, Beneficiaries count: " . count($beneficiaryIds));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Batch returned to re-capture successfully. All staged data has been deleted.',
+                'deleted_beneficiaries_count' => count($beneficiaryIds)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error returning batch to re-capture: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Return individual beneficiary to re-capture - deletes staged data for one beneficiary
+     */
+    public function returnBeneficiaryToRecapture(Request $req)
+    {
+        try {
+            // Check if user is authenticated first
+            if (!Auth::check()) {
+                return response()->json(['error' => 'User not authenticated'], 401);
+            }
+            $user_id = Auth::user()->id;
+            $groups = getUserGroups($user_id);
+            $superUserID = getSuperUserGroupId();
+            $isSuperUser = in_array($superUserID, $groups);
+            
+            if (!$isSuperUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied. Only superusers can perform this action.'
+                ]);
+            }
+
+            $beneficiary_id = $req->input('beneficiary_id');
+            $school_id = $req->input('school_id');
+
+            if (!$beneficiary_id || !$school_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Beneficiary ID and School ID are required'
+                ]);
+            }
+
+            Log::info("Returning beneficiary to re-capture - Beneficiary ID: {$beneficiary_id}, School ID: {$school_id}");
+
+            // Delete from beneficiary_images_staging
+            DB::table('beneficiary_images_staging')
+                ->where('school_id', $school_id)
+                ->where('beneficiary_id', $beneficiary_id)
+                ->delete();
+
+            // Delete from beneficiary_fees_staging
+            DB::table('beneficiary_fees_staging')
+                ->where('school_id', $school_id)
+                ->where('beneficiary_id', $beneficiary_id)
+                ->delete();
+
+            // Delete from beneficiary_payresponses_staging
+            DB::table('beneficiary_payresponses_staging')
+                ->where('beneficiary_id', $beneficiary_id)
+                ->where('school_id', $school_id)
+                ->delete();
+
+            Log::info("Beneficiary returned to re-capture successfully - Beneficiary ID: {$beneficiary_id}");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Beneficiary returned to re-capture successfully. All staged data has been deleted.'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error returning beneficiary to re-capture: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
     }
 
 }

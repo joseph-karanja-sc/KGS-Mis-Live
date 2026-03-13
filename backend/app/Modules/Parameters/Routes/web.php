@@ -67,6 +67,12 @@ Route::group(['prefix' => 'parameters'], function () {
         Route::get('getCwacDropdowns', 'ParametersController@getCwacDropdowns');
         Route::get('getProvinces', 'ParametersController@getProvinces');
         Route::post('saveSchoolBankApprovalInfo', 'ParametersController@saveSchoolBankApprovalInfo');
+        // batch transfer routes
+        Route::get('getBatchTransferRecords', 'ParametersController@getBatchTransferRecords');
+        Route::post('processBatchTransfer', 'ParametersController@processBatchTransfer');
+        // New routes for return to re-capture functionality
+        Route::post('returnBatchToRecapture', 'ParametersController@returnBatchToRecapture');
+        Route::post('returnBeneficiaryToRecapture', 'ParametersController@returnBeneficiaryToRecapture');
     });
 });
 
