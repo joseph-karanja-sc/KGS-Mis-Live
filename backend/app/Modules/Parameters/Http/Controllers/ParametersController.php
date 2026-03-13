@@ -5877,7 +5877,7 @@ class ParametersController extends BaseController
 
         try {
             // Get all transfer records from staging
-            $stagingRecords = DB::table('beneficiary_payresponses_staging')
+            $stagingRecords = DB::table('beneficiary_payresponses_staging_clone')
                 ->where('is_transfered', 1)
                 ->whereNotNull('school_transfered_to')
                 ->get();
@@ -5901,7 +5901,7 @@ class ParametersController extends BaseController
                     ]);
 
                 // 2. Delete the staging record
-                DB::table('beneficiary_payresponses_staging')
+                DB::table('beneficiary_payresponses_staging_clone')
                     ->where('auto_id', $record->auto_id)
                     ->delete();
 
@@ -5962,7 +5962,7 @@ class ParametersController extends BaseController
             Log::info("Returning batch to re-capture - Batch ID: {$batch_id}, School ID: {$school_id}");
 
             // Get all beneficiary IDs in this batch before deleting
-            $beneficiaryIds = DB::table('beneficiary_payresponses_staging')
+            $beneficiaryIds = DB::table('beneficiary_payresponses_staging_clone')
                 // ->where('batch_id', $batch_id)
                 ->where('school_id', $school_id)
                 ->pluck('beneficiary_id')
@@ -5980,8 +5980,8 @@ class ParametersController extends BaseController
                 ->whereIn('beneficiary_id', $beneficiaryIds)
                 ->delete();
 
-            // Delete from beneficiary_payresponses_staging
-            DB::table('beneficiary_payresponses_staging')
+            // Delete from beneficiary_payresponses_staging_clone
+            DB::table('beneficiary_payresponses_staging_clone')
                 // ->where('batch_id', $batch_id)
                 ->where('school_id', $school_id)
                 ->delete();
@@ -6049,8 +6049,8 @@ class ParametersController extends BaseController
                 ->where('beneficiary_id', $beneficiary_id)
                 ->delete();
 
-            // Delete from beneficiary_payresponses_staging
-            DB::table('beneficiary_payresponses_staging')
+            // Delete from beneficiary_payresponses_staging_clone
+            DB::table('beneficiary_payresponses_staging_clone')
                 ->where('beneficiary_id', $beneficiary_id)
                 ->where('school_id', $school_id)
                 ->delete();
