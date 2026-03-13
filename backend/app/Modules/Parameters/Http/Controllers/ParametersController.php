@@ -2638,27 +2638,9 @@ class ParametersController extends BaseController
             $post_data = $req->all();
             $school_id = $post_data['school_id'] ?? null;
 
-            $qry = DB::table('beneficiary_payresponses_staging_clone as t1')
-                ->selectRaw('t1.id,t1.signature,t1.beneficiary_image,t1.disclaimer_form,t1.images_converted');
-
-            if ($school_id) {
-                $qry->where('t1.school_id', $school_id);
-            }
-
-            $qry->whereRaw("t1.verification_status = 'pending' AND t1.is_enrolled = 1");
-
-            $results = $qry->get();
-
-
-            /*
-            Conversion block removed.
-            We now only rely on images_converted already stored in DB.
-            */
-
-
-            $fin_qry = DB::table('beneficiary_uploadfiles_staging as t1')
-                ->leftJoin('beneficiary_images_staging as t2', 't2.image_type', '=', 't1.id')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.id')
+            $qry = DB::table('beneficiary_images_staging as t2')
+                ->leftJoin('beneficiary_uploadfiles_staging as t1', 't2.image_type', '=', 't1.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.beneficiary_id')
                 ->selectRaw('
                     t2.id,
                     t2.beneficiary_id,
@@ -2673,18 +2655,17 @@ class ParametersController extends BaseController
                 ');
 
             if ($school_id) {
-                $fin_qry->where('t2.school_id', $school_id);
+                $qry->where('t2.school_id', $school_id);
             }
 
-            $fin_qry->whereRaw("t3.verification_status = 'pending'")
-                ->groupBy('t2.beneficiary_id', 'image_type');
+            $qry->where('t3.verification_status', 'pending')
+                ->groupBy('t2.beneficiary_id', 't2.image_type');
 
-            $fin_results = $fin_qry->get();
-
+            $results = $qry->get();
 
             $res = [
                 'success' => true,
-                'results' => $fin_results,
+                'results' => $results,
                 'message' => 'All is well'
             ];
 
