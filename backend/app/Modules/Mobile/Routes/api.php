@@ -15,10 +15,10 @@ use App\Http\Controllers\MobileController;
 
 // routes for production
 
-Route::prefix(config('app.api_prefix'))->group(function () {
+Route::prefix(config('app.api_env_prefix'))->group(function () {
        //test
     Route::get('/test-live', function () {
-        return 'pg api is up and running';
+        return 'pg api is up and running well';
     });
 
     Route::post('/test-me', 'MobileController@testing');
@@ -68,7 +68,7 @@ Route::prefix(config('app.api_prefix'))->group(function () {
 
 });
 
-// Route::prefix('zispis/v1')->group(function () {
+// Route::prefix('uat/zispis/v1')->group(function () {
 //     //test
 //     Route::get('/test-live', function () {
 //         return 'pg api is up and running';
