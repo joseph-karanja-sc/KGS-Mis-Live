@@ -2464,7 +2464,7 @@ class ParametersController extends BaseController
 
             $query = DB::table('beneficiary_uploadfiles_staging as t1')
                 ->leftJoin('beneficiary_images_staging as t2', 't2.image_type', '=', 't1.id')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging as t3', 't2.beneficiary_id', '=', 't3.id')
                 ->leftJoin('beneficiary_images as t4', 't2.beneficiary_id', '=', 't4.girl_id')
                 ->selectRaw(
                     't2.id, t2.beneficiary_id, t2.image_type, t2.school_id, 
@@ -2511,7 +2511,7 @@ class ParametersController extends BaseController
         try {
             $post_data = $req->all();
             $school_id = $post_data['school_id'];
-            $qry = DB::table('beneficiary_payresponses_staging_clone as t1')
+            $qry = DB::table('beneficiary_payresponses_staging as t1')
                 ->selectRaw('t1.id,t1.signature,t1.beneficiary_image,t1.disclaimer_form,t1.images_converted');
             if(isset($school_id)) {
                 $qry->where('t1.school_id', $school_id);
@@ -2591,7 +2591,7 @@ class ParametersController extends BaseController
                             }
                         }
                         if ($img_update) {
-                            DB::table('beneficiary_payresponses_staging_clone')
+                            DB::table('beneficiary_payresponses_staging')
                                 ->where('id', $beneficiary->id)
                                 ->update($img_update);
                         }
@@ -2600,7 +2600,7 @@ class ParametersController extends BaseController
 
             $fin_qry = DB::table('beneficiary_uploadfiles_staging as t1')
                 ->leftJoin('beneficiary_images_staging as t2', 't2.image_type', '=', 't1.id')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't2.beneficiary_id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging as t3', 't2.beneficiary_id', '=', 't3.id')
                 ->selectRaw('t2.id,t2.beneficiary_id,t2.image_type,t2.school_id,
                         t1.file_name as image_name,t2.image_name as image_file,t2.image_name as image_view,
                         CONCAT(t3.first_name," ",t3.surname) AS full_name,t3.id as ben_id, "Image-PNG" as file_type');
@@ -2907,7 +2907,7 @@ class ParametersController extends BaseController
                                 }
 
 
-                                $sql = "INSERT INTO beneficiary_payresponses_staging_clone (" .
+                                $sql = "INSERT INTO beneficiary_payresponses_staging (" .
                                     $columnList .
                                     ") VALUES (" .
                                     implode(',', $placeholders) .
@@ -3189,7 +3189,7 @@ class ParametersController extends BaseController
                                     }
                                 }
 
-                                $sql = "INSERT INTO beneficiary_payresponses_staging_clone (" .
+                                $sql = "INSERT INTO beneficiary_payresponses_staging (" .
                                     $columnList .
                                     ") VALUES (" .
                                     implode(',', $placeholders) .
@@ -3329,7 +3329,7 @@ class ParametersController extends BaseController
     {
         $limit = 50;
 
-        $records = DB::table('beneficiary_payresponses_staging_clone')
+        $records = DB::table('beneficiary_payresponses_staging')
             ->where('images_converted', 0)
             ->limit($limit)
             ->get();
@@ -3373,14 +3373,14 @@ class ParametersController extends BaseController
 
             $update['images_converted'] = 1;
 
-            DB::table('beneficiary_payresponses_staging_clone')
+            DB::table('beneficiary_payresponses_staging')
                 ->where('id', $row->id)
                 ->update($update);
 
             $converted++;
         }
 
-        $remaining = DB::table('beneficiary_payresponses_staging_clone')
+        $remaining = DB::table('beneficiary_payresponses_staging')
             ->where('images_converted', 0)
             ->count();
 
@@ -3403,7 +3403,7 @@ class ParametersController extends BaseController
         try {
 
             //Fetch one pending record that still contains base64 images
-            $record = DB::table('beneficiary_payresponses_staging_clone')
+            $record = DB::table('beneficiary_payresponses_staging')
                 ->select(
                     'id',
                     'beneficiary_id',
@@ -3464,7 +3464,7 @@ class ParametersController extends BaseController
             );
 
             //Mark the record as converted so it will not be processed again
-            DB::table('beneficiary_payresponses_staging_clone')
+            DB::table('beneficiary_payresponses_staging')
                 ->where('id', $record->id)
                 ->update([
                     'images_converted' => 1
@@ -3969,7 +3969,7 @@ class ParametersController extends BaseController
             $recommendation = 1;
             $qry = DB::table('beneficiary_information as t1')
                 ->join('school_information as t2','t1.school_id', '=', 't2.id')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't1.id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging as t3', 't1.id', '=', 't3.id')
                 ->select('t1.id','t1.beneficiary_id','t1.household_id',
                     't1.exam_school_id','t1.school_id','t1.cwac_id',
                     't1.acc_id','t1.ward_id','t1.constituency_id',
@@ -3989,7 +3989,7 @@ class ParametersController extends BaseController
                 ->where('t1.verification_recommendation', 1);
             $count_qry = DB::table('beneficiary_information as t1')
                 ->join('school_information as t2','t1.school_id', '=', 't2.id')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t3', 't1.id', '=', 't3.id')
+                ->leftJoin('beneficiary_payresponses_staging as t3', 't1.id', '=', 't3.id')
                 ->selectRaw('COUNT(t1.id) as id_count')
                 ->where('t1.beneficiary_status', 4)
                 ->where('t1.is_checklist_verified', 0)
@@ -4191,7 +4191,7 @@ class ParametersController extends BaseController
         $total_in_batch = $req->input('total_in_batch');
         $results = $req->input('results');
         $skippedRecords = [];
-        // if (DB::table('beneficiary_payresponses_staging_clone')->where('school_id', $school_id)->exists()) {
+        // if (DB::table('beneficiary_payresponses_staging')->where('school_id', $school_id)->exists()) {
         //                         $skippedRecords[] = $school_id;
         //                         continue;
         //                     }
@@ -5360,7 +5360,7 @@ class ParametersController extends BaseController
                     t2.name as school_name,t2.code as emis_code,t9.witness_name,t10.batch_no,t9.head_mobile as headteacher_tel_no,
                     t3.name as district_name,t6.name as province_name,t9.in_workflow,t9.full_names as school_headteacher,
                     (
-                        SELECT COUNT(t11.id) FROM beneficiary_payresponses_staging_clone t11 
+                        SELECT COUNT(t11.id) FROM beneficiary_payresponses_staging t11 
                         WHERE " . ($is_verified == 1 ? ("t11.verification_status = 'pending'") : 
                         (" (t11.verification_status = 'marked_for_transfer' OR t11.verification_status = 'unavailable')"
                         )) . " AND t11.school_id = t9.school_id
@@ -5379,7 +5379,7 @@ class ParametersController extends BaseController
                 // ->leftJoin('users as t8', 't1.created_by', '=', 't8.id')
                 ->leftJoin('school_bankinformation as sbi', 't9.school_id', '=', 'sbi.school_id')
                 ->leftJoin('bank_details as bd', 'sbi.bank_id', '=', 'bd.id')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t1', 't9.school_id', '=', 't1.school_id');
+                ->leftJoin('beneficiary_payresponses_staging as t1', 't9.school_id', '=', 't1.school_id');
             if (isset($year) && $year != '') {
                 $qry->whereRaw("YEAR(t9.created_at)=".$year);
             }
@@ -5440,7 +5440,7 @@ class ParametersController extends BaseController
                     s1.beneficiary_id,
                     s1.school_id,
                     s1.school_transfered_to
-                FROM beneficiary_payresponses_staging_clone s1
+                FROM beneficiary_payresponses_staging s1
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
             ", [$date]);
@@ -5449,7 +5449,7 @@ class ParametersController extends BaseController
             // Update beneficiary school
             DB::statement("
                 UPDATE beneficiary_information t1
-                INNER JOIN beneficiary_payresponses_staging_clone s1
+                INNER JOIN beneficiary_payresponses_staging s1
                     ON t1.beneficiary_id = s1.beneficiary_id
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
@@ -5459,7 +5459,7 @@ class ParametersController extends BaseController
 
             // Delete processed staging records
             DB::statement("
-                DELETE FROM beneficiary_payresponses_staging_clone
+                DELETE FROM beneficiary_payresponses_staging
                 WHERE DATETIME >= ?
                 AND is_transfered = 1
             ", [$date]);
@@ -5498,7 +5498,7 @@ class ParametersController extends BaseController
             $createdBy = auth()->user()->id ?? 'system';
 
             // COUNT RECORDS
-            $recordsToProcess = DB::table('beneficiary_payresponses_staging_clone')
+            $recordsToProcess = DB::table('beneficiary_payresponses_staging')
                 ->where('DATETIME', '>=', $date)
                 ->where('is_transfered', 1)
                 ->count();
@@ -5516,7 +5516,7 @@ class ParametersController extends BaseController
                     s1.school_transfered_to,
                     NOW(),
                     ?
-                FROM beneficiary_payresponses_staging_clone s1
+                FROM beneficiary_payresponses_staging s1
                 WHERE s1.DATETIME >= ?
                 AND s1.is_transfered = 1
             ", [$createdBy, $date]);
@@ -5529,7 +5529,7 @@ class ParametersController extends BaseController
             // UPDATE BENEFICIARY SCHOOL
             $updatedCount = DB::affectingStatement("
                 UPDATE beneficiary_information t1
-                INNER JOIN beneficiary_payresponses_staging_clone s1
+                INNER JOIN beneficiary_payresponses_staging s1
                     ON t1.beneficiary_id = s1.beneficiary_id
                 SET t1.school_id = s1.school_transfered_to
                 WHERE s1.DATETIME >= ?
@@ -5544,7 +5544,7 @@ class ParametersController extends BaseController
 
             // DELETE STAGING RECORDS
             $deletedCount = DB::affectingStatement("
-                DELETE FROM beneficiary_payresponses_staging_clone
+                DELETE FROM beneficiary_payresponses_staging
                 WHERE DATETIME >= ?
                 AND is_transfered = 1
             ", [$date]);
@@ -5607,7 +5607,7 @@ class ParametersController extends BaseController
             do {
 
                 // Fetch batch of beneficiary_ids
-                $ids = DB::table('beneficiary_payresponses_staging_clone')
+                $ids = DB::table('beneficiary_payresponses_staging')
                     ->where('DATETIME', '>=', $date)
                     ->limit($batchSize)
                     ->pluck('beneficiary_id')
@@ -5691,7 +5691,7 @@ class ParametersController extends BaseController
     {
         $limit = 100;
 
-        $records = DB::table('beneficiary_payresponses_staging_clone')
+        $records = DB::table('beneficiary_payresponses_staging')
             ->select('id','beneficiary_image','signature','disclaimer_form')
             ->where('images_converted',1)
             ->limit($limit)
@@ -5756,7 +5756,7 @@ class ParametersController extends BaseController
 
             if (!empty($update)) {
 
-                DB::table('beneficiary_payresponses_staging_clone')
+                DB::table('beneficiary_payresponses_staging')
                     ->where('id',$row->id)
                     ->update($update);
 
@@ -5877,7 +5877,7 @@ class ParametersController extends BaseController
 
         try {
             // Get all transfer records from staging
-            $stagingRecords = DB::table('beneficiary_payresponses_staging_clone')
+            $stagingRecords = DB::table('beneficiary_payresponses_staging')
                 ->where('is_transfered', 1)
                 ->whereNotNull('school_transfered_to')
                 ->get();
@@ -5901,7 +5901,7 @@ class ParametersController extends BaseController
                     ]);
 
                 // 2. Delete the staging record
-                DB::table('beneficiary_payresponses_staging_clone')
+                DB::table('beneficiary_payresponses_staging')
                     ->where('auto_id', $record->auto_id)
                     ->delete();
 
@@ -5962,7 +5962,7 @@ class ParametersController extends BaseController
             Log::info("Returning batch to re-capture - Batch ID: {$batch_id}, School ID: {$school_id}");
 
             // Get all beneficiary IDs in this batch before deleting
-            $beneficiaryIds = DB::table('beneficiary_payresponses_staging_clone')
+            $beneficiaryIds = DB::table('beneficiary_payresponses_staging')
                 // ->where('batch_id', $batch_id)
                 ->where('school_id', $school_id)
                 ->pluck('beneficiary_id')
@@ -5980,8 +5980,8 @@ class ParametersController extends BaseController
                 ->whereIn('beneficiary_id', $beneficiaryIds)
                 ->delete();
 
-            // Delete from beneficiary_payresponses_staging_clone
-            DB::table('beneficiary_payresponses_staging_clone')
+            // Delete from beneficiary_payresponses_staging
+            DB::table('beneficiary_payresponses_staging')
                 // ->where('batch_id', $batch_id)
                 ->where('school_id', $school_id)
                 ->delete();
@@ -6049,8 +6049,8 @@ class ParametersController extends BaseController
                 ->where('beneficiary_id', $beneficiary_id)
                 ->delete();
 
-            // Delete from beneficiary_payresponses_staging_clone
-            DB::table('beneficiary_payresponses_staging_clone')
+            // Delete from beneficiary_payresponses_staging
+            DB::table('beneficiary_payresponses_staging')
                 ->where('beneficiary_id', $beneficiary_id)
                 ->where('school_id', $school_id)
                 ->delete();

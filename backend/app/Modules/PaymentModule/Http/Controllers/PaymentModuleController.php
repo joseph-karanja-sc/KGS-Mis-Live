@@ -12761,7 +12761,7 @@ public function uploadPaymentGrantList(Request $request)
                         if ($img_update) {
                             $img_update['images_converted'] = 1;
                             // $img_update['disclaimer_form'] = '';
-                            DB::table('beneficiary_payresponses_staging_clone')
+                            DB::table('beneficiary_payresponses_staging')
                                 ->insert(
                                     array(
 
@@ -12789,7 +12789,7 @@ public function uploadPaymentGrantList(Request $request)
                         if ($img_update) {
                             $img_update['images_converted'] = 1;
                             // $img_update['disclaimer_form'] = '';
-                            DB::table('beneficiary_payresponses_staging_clone')
+                            DB::table('beneficiary_payresponses_staging')
                                 ->insert(
                                     array(
 
@@ -12817,7 +12817,7 @@ public function uploadPaymentGrantList(Request $request)
                         if ($img_update) {
                             $img_update['images_converted'] = 1;
                             // $img_update['disclaimer_form'] = '';
-                            DB::table('beneficiary_payresponses_staging_clone')
+                            DB::table('beneficiary_payresponses_staging')
                                 ->insert(
                                     array(
 
@@ -12843,7 +12843,7 @@ public function uploadPaymentGrantList(Request $request)
             $payment_ref_no = $req->input('payment_ref_no');
             $payment_status = 'PAID';
             $fin_qry = DB::table('beneficiary_uploadfiles_staging as t1')
-                ->leftJoin('beneficiary_payresponses_staging_clone as t2', 't2.image_type', '=', 't1.id')
+                ->leftJoin('beneficiary_payresponses_staging as t2', 't2.image_type', '=', 't1.id')
 
                 ->leftJoin('beneficiary_information as t3', 't2.beneficiary_id', '=', 't3.id')
                 ->leftJoin('beneficiary_images_ppm as t4', 't4.beneficiary_number', '=', 't3.beneficiary_id')
