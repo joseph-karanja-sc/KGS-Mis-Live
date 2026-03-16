@@ -6248,4 +6248,179 @@ class ParametersController extends BaseController
         }
     }
 
+    public function migrateMissingBeneficiaries()
+    {
+        try {
+
+            $start = microtime(true);
+
+            $sql = "
+                INSERT INTO beneficiary_payresponses_staging_clone
+                (
+                    id,
+                    beneficiary_schoolstatus_id,
+                    in_workflow,
+                    batch_id,
+                    batch_no,
+                    beneficiary_id,
+                    school_id,
+                    first_name,
+                    address,
+                    last_name,
+                    surname,
+                    home_district,
+                    grade,
+                    confirmed_grade,
+                    disclaimer_form_path,
+                    latitude,
+                    longitude,
+                    subjects,
+                    disclaimer_form_data,
+                    parent_phone,
+                    finger_print_path,
+                    cwac_phone,
+                    exam_number,
+                    exam_fees,
+                    signature_path,
+                    image_path,
+                    image_data,
+                    remarks,
+                    previous_grade,
+                    location,
+                    responses,
+                    datetime,
+                    created_at,
+                    created_by,
+                    prevrecord_id,
+                    updated_at,
+                    updated_by,
+                    beneficiary_image,
+                    disclaimer_form,
+                    fingerprint,
+                    signature,
+                    consent_form_path,
+                    verification_status,
+                    is_transfered,
+                    school_transfered_to,
+                    transfered_message,
+                    is_available,
+                    unavailable_reason_id,
+                    unavailable_remark,
+                    is_verified,
+                    wb_facility_manager_id,
+                    has_signed_consent,
+                    has_signed_disclaimer,
+                    is_gce_external_candidate,
+                    resps_inserted,
+                    enrollment_status_id,
+                    image_url,
+                    consentform_url,
+                    term1_fees,
+                    term2_fees,
+                    term3_fees,
+                    annual_fees,
+                    is_enrolled,
+                    images_converted,
+                    transfer_reason_id,
+                    transfer_remark,
+                    additional_fee_amount,
+                    additional_fee_description
+                )
+                SELECT
+                    s.id,
+                    s.beneficiary_schoolstatus_id,
+                    s.in_workflow,
+                    s.batch_id,
+                    s.batch_no,
+                    s.beneficiary_id,
+                    s.school_id,
+                    s.first_name,
+                    s.address,
+                    s.last_name,
+                    s.surname,
+                    s.home_district,
+                    s.grade,
+                    s.confirmed_grade,
+                    s.disclaimer_form_path,
+                    s.latitude,
+                    s.longitude,
+                    s.subjects,
+                    s.disclaimer_form_data,
+                    s.parent_phone,
+                    s.finger_print_path,
+                    s.cwac_phone,
+                    s.exam_number,
+                    s.exam_fees,
+                    s.signature_path,
+                    s.image_path,
+                    s.image_data,
+                    s.remarks,
+                    s.previous_grade,
+                    s.location,
+                    s.responses,
+                    s.datetime,
+                    s.created_at,
+                    s.created_by,
+                    1,
+                    s.updated_at,
+                    s.updated_by,
+                    0,
+                    0,
+                    s.fingerprint,
+                    0,
+                    s.consent_form_path,
+                    s.verification_status,
+                    s.is_transfered,
+                    s.school_transfered_to,
+                    s.transfered_message,
+                    s.is_available,
+                    s.unavailable_reason_id,
+                    s.unavailable_remark,
+                    s.is_verified,
+                    s.wb_facility_manager_id,
+                    s.has_signed_consent,
+                    s.has_signed_disclaimer,
+                    s.is_gce_external_candidate,
+                    s.resps_inserted,
+                    s.enrollment_status_id,
+                    s.image_url,
+                    s.consentform_url,
+                    s.term1_fees,
+                    s.term2_fees,
+                    s.term3_fees,
+                    s.annual_fees,
+                    s.is_enrolled,
+                    s.images_converted,
+                    s.transfer_reason_id,
+                    s.transfer_remark,
+                    s.additional_fee_amount,
+                    s.additional_fee_description
+                FROM beneficiary_payresponses_staging s
+                LEFT JOIN beneficiary_payresponses_staging_clone c
+                    ON s.beneficiary_id = c.beneficiary_id
+                    AND s.school_id = c.school_id
+                WHERE c.beneficiary_id IS NULL
+            ";
+
+            $rowsInserted = DB::insert($sql);
+
+            $timeTaken = round(microtime(true) - $start, 2);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Migration completed',
+                'rows_inserted' => DB::affectingStatement($sql),
+                'time_seconds' => $timeTaken
+            ]);
+
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+
+        }
+    }
+
 }
