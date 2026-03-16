@@ -5391,7 +5391,7 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
-    public function getSyncedVerificationDataOldFunc(Request $req)
+    public function getSyncedVerificationData(Request $req)
     {
         try {
             //filter by districts get from the user rights
@@ -5493,7 +5493,7 @@ class ParametersController extends BaseController
     }
 
     //optimised function
-    public function getSyncedVerificationData(Request $req)
+    public function getSyncedVerificationDataNewfunc(Request $req)
     {
         try {
 
