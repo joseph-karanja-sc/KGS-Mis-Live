@@ -5492,6 +5492,157 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
+    //optimised function
+    public function getSyncedVerificationDataNewfunc(Request $req)
+    {
+        try {
+
+            // grab request values
+            $post_data = $req->all();
+            $user_id = $this->user_id;
+
+            $district_id = $req->input('district_id');
+            $year = $req->input('year');
+            $in_workflow = $req->input('in_workflow');
+
+            // if absent girls flag is passed we invert verification logic
+            $is_verified = isset($post_data['absent_girls']) 
+                ? ($post_data['absent_girls'] == 1 ? 0 : 1) 
+                : 1;
+
+            // user security context
+            $groups = getUserGroups($user_id);
+            $superUserID = getSuperUserGroupId();
+            $assignedDistricts = getUserDistricts($user_id);
+
+            $isSuperUser = in_array($superUserID, $groups);
+
+
+            // get beneficiary counts grouped by school
+            // doing this once avoids running count subqueries per row
+            $beneficiaryCounts = DB::table('beneficiary_payresponses_staging_clone')
+                ->select('school_id', DB::raw('COUNT(id) as beneficiary_no'))
+                ->when($is_verified == 1, function ($q) {
+                    $q->where('verification_status', 'pending');
+                })
+                ->when($is_verified == 0, function ($q) {
+                    $q->whereIn('verification_status', [
+                        'marked_for_transfer',
+                        'unavailable'
+                    ]);
+                })
+                ->groupBy('school_id');
+
+
+            // get term information per school
+            // again doing this as a join instead of a subquery
+            $fees = DB::table('beneficiary_fees_staging')
+                ->select('school_id', 'term');
+
+
+            // main query for school verification data
+            $qry = DB::table('beneficiary_metainfo_staging as t9')
+
+                ->select([
+                    't9.id',
+                    't9.full_names',
+                    't9.head_mobile as head_telephone',
+
+                    DB::raw("COALESCE(t9.latitude,t9.new_latitude) as latitude"),
+                    DB::raw("COALESCE(t9.longitude,t9.new_longitude) as longitude"),
+
+                    't9.batch_id',
+                    't9.school_id',
+                    't9.created_at',
+
+                    't2.name as school_name',
+                    't2.code as emis_code',
+                    't2.school_type_id',
+
+                    't3.name as district_name',
+                    't6.name as province_name',
+
+                    't10.batch_no',
+
+                    'bc.beneficiary_no',
+                    'f.term as term_id'
+                ])
+
+                // school lookup
+                ->join('school_information as t2', 't9.school_id', '=', 't2.id')
+
+                // district and province info
+                ->leftJoin('districts as t3', 't2.district_id', '=', 't3.id')
+                ->leftJoin('provinces as t6', 't3.province_id', '=', 't6.id')
+
+                // verification batch info
+                ->leftJoin('payment_verificationbatch as t10', 't9.batch_id', '=', 't10.id')
+
+                // join aggregated beneficiary counts
+                ->leftJoinSub($beneficiaryCounts, 'bc', function ($join) {
+                    $join->on('bc.school_id', '=', 't9.school_id');
+                })
+
+                // join school term info
+                ->leftJoinSub($fees, 'f', function ($join) {
+                    $join->on('f.school_id', '=', 't9.school_id');
+                });
+
+
+            // filter by year if provided
+            if (!empty($year)) {
+                $qry->whereYear('t9.created_at', $year);
+            }
+
+
+            // district filtering with permission check
+            if (!empty($district_id)) {
+
+                if (!$isSuperUser && !in_array($district_id, $assignedDistricts)) {
+                    // user trying to access district they are not assigned to
+                    $qry->where('t2.district_id', -1);
+                } else {
+                    $qry->where('t2.district_id', $district_id);
+                }
+            }
+
+
+            // if user is not superuser restrict to assigned districts
+            if (!$isSuperUser) {
+                $qry->whereIn('t2.district_id', $assignedDistricts);
+            }
+
+
+            // workflow filtering
+            if ($in_workflow !== null && $in_workflow !== '') {
+                $qry->where('t9.in_workflow', $in_workflow);
+            }
+
+
+            // order by earliest submission
+            $qry->orderBy('t9.created_at', 'asc');
+
+
+            // paginate results so we dont return thousands of rows at once
+            // 50 is reasonable for api responses
+            $results = $qry->paginate(50);
+
+
+            return response()->json([
+                'success' => true,
+                'results' => $results,
+                'message' => 'records fetched successfully'
+            ]);
+
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
     public function processTransfersEnterpriseOld()
     {
         DB::beginTransaction();
