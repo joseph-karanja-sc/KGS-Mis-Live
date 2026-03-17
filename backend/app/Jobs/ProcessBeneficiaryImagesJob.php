@@ -100,7 +100,7 @@ class ProcessBeneficiaryImagesJob implements ShouldQueue
                     if (!empty($updates)) {
                         $updates['images_converted'] = 1;
                         $updates['updated_at'] = now();
-                        DB::table('beneficiary_payresponses_staging')
+                        DB::table('beneficiary_payresponses_stagin')
                             ->where('id', $beneficiary['id'])
                             ->update($updates);
                     }
