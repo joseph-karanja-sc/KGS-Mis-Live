@@ -340,7 +340,8 @@ class MobileController extends Controller
         */
         try {
             $client = new \GuzzleHttp\Client([
-                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
+                // 'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
+                'base_uri' => config('app.pg_base_url') . '/api/',
                 'timeout'  => 15,
             ]);
 
