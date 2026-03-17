@@ -21,6 +21,10 @@ use GuzzleHttp\Exception\RequestException;
 use Illuminate\Support\Facades\Validator;
 use Ramsey\Uuid\Uuid;
 
+use TCPDF;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Storage;
+
 class MobileController extends Controller
 {
     use GrmModuleTrait;
