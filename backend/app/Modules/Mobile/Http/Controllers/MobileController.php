@@ -851,6 +851,17 @@ class MobileController extends Controller
         ]);
     }
 
+    public function downloadPaymentList(Request $request, $filename)
+    {
+        $path = storage_path('app/public/payment_lists/' . $filename);
+
+        if (!file_exists($path)) {
+            abort(404);
+        }
+
+        return response()->download($path);
+    }
+
     //post transaction status
     public function sendPaymentStatuses(Request $request)
     {
