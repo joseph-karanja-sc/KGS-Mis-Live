@@ -496,7 +496,8 @@ class MobileController extends Controller
             ->select(
                 'district_assigned_string',
                 'school_assigned_string',
-                'school_cwac_string'
+                'school_cwac_string',
+                'zonal_accountant'
             )
             ->first();
 
@@ -516,6 +517,7 @@ class MobileController extends Controller
                     'district_assigned' => $ppmAppUser->district_assigned_string ?? null,
                     'school_assigned'   => $ppmAppUser->school_assigned_string ?? null,
                     'school_cwac'       => $ppmAppUser->school_cwac_string ?? null,
+                    'zonal_accountant'  => $ppmAppUser->zonal_accountant ?? null,
                 ],
             ], 200)
             ->header('Content-Type', 'application/json')
