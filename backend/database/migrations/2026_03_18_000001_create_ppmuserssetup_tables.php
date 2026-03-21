@@ -14,7 +14,7 @@ class CreatePpmUsersSetupTables extends Migration
     {
         // Main PPM user details table - one record per user
         Schema::create('ppmuserssetup_details', function (Blueprint $table) {
-            $table->id();
+            $table->bigIncrements('id');
             $table->integer('user_id')->unique();
             $table->enum('account_type', ['zonal_accountant', 'school_accountant'])->default('school_accountant');
             $table->boolean('has_kgs_app_access')->default(false);
@@ -31,7 +31,7 @@ class CreatePpmUsersSetupTables extends Migration
 
         // Allocated districts table - multiple records per user allowed
         Schema::create('ppmuserssetup_allocated_districts', function (Blueprint $table) {
-            $table->id();
+            $table->bigIncrements('id');
             $table->unsignedBigInteger('ppm_user_detail_id');
             $table->integer('district_id');
             $table->string('district_name')->nullable(); // as district_assigned_string 
@@ -46,7 +46,7 @@ class CreatePpmUsersSetupTables extends Migration
 
         // Allocated schools table - multiple records per user allowed (for zonal accountants)
         Schema::create('ppmuserssetup_allocated_schools', function (Blueprint $table) {
-            $table->id();
+            $table->bigIncrements('id');
             $table->unsignedBigInteger('ppm_user_detail_id');
             $table->integer('school_id');
             $table->string('emis_code')->nullable();
