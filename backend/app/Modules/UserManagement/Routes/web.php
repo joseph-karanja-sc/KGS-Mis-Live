@@ -59,7 +59,20 @@ Route::group(['prefix' => 'usermanagement'], function () {
          Route::get('getOpenSchools', 'UserManagementController@getOpenSchools');
         Route::get('getAssignedSchools', 'UserManagementController@getAssignedSchools');
         Route::get('DownloadSystemUsers','UserManagementController@DownloadSystemUsers');
- Route::get('returnSystemUsersDownloadUrl','UserManagementController@returnSystemUsersDownloadUrl');
+        Route::get('returnSystemUsersDownloadUrl','UserManagementController@returnSystemUsersDownloadUrl');
+        // ppmuserssetup routes start
+        Route::get('getPpmUsers', 'UserManagementController@getPpmUsers');
+        Route::get('getAvailablePpmUsers', 'UserManagementController@getAvailablePpmUsers');
+        Route::post('saveNewPpmUser', 'UserManagementController@saveNewPpmUser');
+        Route::get('getPpmUserDetail', 'UserManagementController@getPpmUserDetail');
+        Route::post('savePpmUserDetail', 'UserManagementController@savePpmUserDetail');
+        Route::post('savePpmUserDistricts', 'UserManagementController@savePpmUserDistricts');
+        Route::post('savePpmUserSchools', 'UserManagementController@savePpmUserSchools');
+        Route::get('getPpmOpenDistricts', 'UserManagementController@getPpmOpenDistricts');
+        Route::get('getPpmAssignedDistricts', 'UserManagementController@getPpmAssignedDistricts');
+        Route::get('getPpmOpenSchools', 'UserManagementController@getPpmOpenSchools');
+        Route::get('getPpmAssignedSchools', 'UserManagementController@getPpmAssignedSchools');
+        // ppmuserssetup routes end
     });
      Route::post('logaccess','UserManagementController@logaccess');
 });
