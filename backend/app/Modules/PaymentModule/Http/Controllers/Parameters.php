@@ -1487,7 +1487,8 @@ class Parameters extends Controller
                     t5.term3_fees,t5.annual_fees"),'t5.school_id','t5.first_name',
                     't5.address','t5.home_district','t5.disclaimer_form_path','t5.subjects','t5.beneficiary_schoolstatus_id',
                     't5.disclaimer_form_data','t5.finger_print_path','t5.exam_number','t5.exam_fees','t5.remarks',
-                    't5.wb_facility_manager_id','t5.has_signed_consent','t5.has_signed_disclaimer','t5.is_gce_external_candidate')
+                    't5.wb_facility_manager_id','t5.has_signed_consent','t5.has_signed_disclaimer','t5.is_gce_external_candidate',
+                    't5.verified_dob','t5.grm_question_answer','t5.additional_fee_amount','t5.additional_fee_description')
                 ->leftJoin('school_information as t3', 't1.school_id', '=', 't3.id')
                 ->leftJoin('districts as t4', 't1.district_id', '=', 't4.id')
                 ->leftJoin('beneficiary_payresponses_staging_clone as t5', 't1.id', '=', 't5.id');
