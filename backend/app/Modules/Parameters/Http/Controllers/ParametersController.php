@@ -2540,13 +2540,16 @@ class ParametersController extends BaseController
                             if($img_update) {
                                 $img_update['images_converted'] = 1;
                                 // $img_update['beneficiary_image'] = '';
-                                DB::table('beneficiary_images_staging')
-                                    ->insert(array(
-                                        'school_id' => $school_id,
+                                DB::table('beneficiary_images_staging')->updateOrInsert(
+                                    [
                                         'beneficiary_id' => $beneficiary_id,
+                                        'school_id' => $school_id,
                                         'image_type' => 1,
-                                        'image_name' => $image_url1
-                                    )
+                                    ],
+                                    [
+                                        'image_name' => $image_url1,
+                                        'created_at' => now(), 
+                                    ]
                                 );
                             }
                         }
@@ -2561,7 +2564,7 @@ class ParametersController extends BaseController
                                 $img_update['images_converted'] = 1;
                                 // $img_update['disclaimer_form'] = '';
                                 DB::table('beneficiary_images_staging')
-                                    ->insert(array(
+                                    ->updateOrInsert(array(
                                         'school_id' => $school_id,
                                         'beneficiary_id' => $beneficiary_id,
                                         'image_type' => 3,
@@ -2581,7 +2584,7 @@ class ParametersController extends BaseController
                                 $img_update['images_converted'] = 1;
                                 // $img_update['signature'] = '';
                                 DB::table('beneficiary_images_staging')
-                                    ->insert(array(
+                                    ->updateOrInsert(array(
                                         'school_id' => $school_id,
                                         'beneficiary_id' => $beneficiary_id,
                                         'image_type' => 2,
@@ -3009,7 +3012,7 @@ class ParametersController extends BaseController
                             } catch (\Exception $e) {
 
                                 Log::error("Error processing enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
-                                Log::error("Beneficiary ID: " . ($enrollment_info['beneficiary_id'] ?? 'unknown'));
+                                Log::error("Beneficiary ID: " . ($enrollment_info['beneficiary_id'] ?? 'unknown').' -----');
                                 Log::error("Error: " . $e->getMessage());
                             }
                         }
@@ -3287,7 +3290,7 @@ class ParametersController extends BaseController
                             } catch (\Exception $e) {
 
                                 Log::error("Error processing enrollment at school index {$schoolIndex}, enrollment index {$enrollIndex}");
-                                Log::error("Beneficiary ID: " . ($enrollment_info['beneficiary_id'] ?? 'unknown'));
+                                Log::error("Beneficiary ID: " . ($enrollment_info['beneficiary_id'] ?? 'unknown') . '---------');
                                 Log::error("Error: " . $e->getMessage());
                             }
                         }
@@ -3742,13 +3745,17 @@ class ParametersController extends BaseController
                     );
 
                     //Store path in staging table
-                    DB::table('beneficiary_images_staging')->insert([
-                        'image_name' => $path,
-                        'beneficiary_id' => $beneficiaryId,
-                        'image_type' => 1,
-                        'school_id' => $schoolId,
-                        'created_at' => now()
-                    ]);
+                    DB::table('beneficiary_images_staging')->updateOrInsert(
+                        [
+                            'beneficiary_id' => $beneficiaryId,
+                            'school_id' => $schoolId,
+                            'image_type' => 1,
+                        ],
+                        [
+                            'image_name' => $path,
+                            'created_at' => now(), 
+                        ]
+                    );
 
                     //Delete base64 after conversion
                     DB::table('beneficiary_payresponses_staging_clone')
@@ -3799,6 +3806,8 @@ class ParametersController extends BaseController
             return null;
         }
 
+        // Log::info("storeBeneficiaryImage() called------------------");
+
         //Convert base64 image to file and get file path
         $path = $this->saveBase64Image(
             $base64Image,
@@ -3807,13 +3816,17 @@ class ParametersController extends BaseController
         );
 
         //Insert the stored image path into beneficiary_images_staging
-        DB::table('beneficiary_images_staging')->insert([
-            'image_name' => $path,
-            'beneficiary_id' => $beneficiaryId,
-            'image_type' => $imageType,
-            'school_id' => $schoolId,
-            'created_at' => now()
-        ]);
+        DB::table('beneficiary_images_staging')->updateOrInsert(
+            [
+                'beneficiary_id' => $beneficiaryId,
+                'school_id' => $schoolId,
+                'image_type' => $imageType,
+            ],
+            [
+                'image_name' => $path,
+                'created_at' => now(), 
+            ]
+        );
 
         return $path;
     }
