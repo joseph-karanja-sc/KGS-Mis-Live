@@ -4111,6 +4111,8 @@ class ParametersController extends BaseController
             $debug = $req->input('debug') == 1;
 
             // get current cycle
+            $cycle = DB::table('system_settings')->first();
+
             if ($cycle) {
                 $year = $cycle->current_year;
                 $term = $cycle->current_term;
