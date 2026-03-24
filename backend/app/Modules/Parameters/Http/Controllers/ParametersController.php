@@ -1677,35 +1677,6 @@ class ParametersController extends BaseController
         }
     }
 
-    // updated by Joseph to v1
-    public function getBeneficiariesForMobileV1(Request $req)
-    {
-        try {
-            $start = 0;
-            $limit = 10000;
-            $beneficiary_status = 4;
-            $recommendation = 1;
-            $qry = DB::table('beneficiary_information as t1')
-                ->select("t1.*")
-                ->offset($start)->limit($limit);
-            $total = $limit - $start;
-            $data = $qry->get();
-            $res = array(
-                'success' => true,
-                'message' => 'Records fetched successfully!!',
-                'total' => $total,
-                'results' => $data
-            );
-        } catch (\Exception $e) {
-            $res = array(
-                'success' => false,
-                'message' => $e->getMessage(),
-                'results' => ''
-            );
-        }
-        return response()->json($res);
-    }
-
     public function runPaymentCronJobs(Request $req)
     {
         try {
@@ -3270,6 +3241,41 @@ class ParametersController extends BaseController
                                     $insertedCount++;
                                     $syncCount++;
 
+                                    //insered 24-mar-2026 by jose, this prevents fetching synced records
+                                    // detect current year and term based on current date
+                                    $now = now();
+                                    $currentYear = $now->year;
+                                    $currentMonth = $now->month;
+
+                                    // determine term based on month
+                                    if ($currentMonth >= 1 && $currentMonth <= 4) {
+                                        $currentTerm = 1;
+                                    } elseif ($currentMonth >= 5 && $currentMonth <= 8) {
+                                        $currentTerm = 2;
+                                    } else {
+                                        $currentTerm = 3;
+                                    }
+
+                                    // prepare sync status data
+                                    $syncData = [
+                                        'beneficiary_id' => $beneficiary_id,
+                                        'school_id' => $school_id,
+                                        'year' => $currentYear,
+                                        'term' => $currentTerm,
+                                        'verification_status' => $enrollment_info['verification_status'] ?? null,
+                                        'synced_at' => now(),
+                                        'created_at' => now(),
+                                        'updated_at' => now()
+                                    ];
+
+                                    // insert or ignore if already exists
+                                    try {
+                                        DB::table('beneficiary_info_sync_status')->insert($syncData);
+                                    } catch (\Exception $e) {
+                                        // duplicate entry expected due to unique constraint
+                                        Log::warning("Sync status already exists for beneficiary: {$beneficiary_id}, year: {$currentYear}, term: {$currentTerm}");
+                                    }
+
                                     Log::info("Inserted enrollment for beneficiary: {$beneficiary_id}, school: {$school_id}");
 
                                 } elseif ($rowCount == 2) {
@@ -4026,7 +4032,8 @@ class ParametersController extends BaseController
         return response()->json($res);
     }
 
-    public function getBeneficiariesForMobile(Request $req)
+    
+    public function getBeneficiariesForMobilev1(Request $req)
     {
         try {
             $start=$req->input('start_at') ? $req->input('start_at') : 0;
@@ -4086,6 +4093,180 @@ class ParametersController extends BaseController
                 'results' => ''
             );
         }
+        return response()->json($res);
+    }
+
+    //added 24 march 2026 by jose
+    public function getBeneficiariesForMobile(Request $req)
+    {
+        try {
+            // get pagination params
+            $start = $req->input('start_at') ? $req->input('start_at') : 0;
+            $limit = $req->input('end_at') ? $req->input('end_at') : 10000;
+
+            // get filters
+            $district_id = $req->input('district_id') ? $req->input('district_id') : null;
+
+            // check debug flag
+            $debug = $req->input('debug') == 1;
+
+            // detect current year and term from current date
+            $now = now();
+            $year = $now->year;
+            $month = $now->month;
+
+            // determine term based on month
+            if ($month >= 1 && $month <= 4) {
+                $term = 1;
+            } elseif ($month >= 5 && $month <= 8) {
+                $term = 2;
+            } else {
+                $term = 3;
+            }
+
+            // main query
+            $qry = DB::table('beneficiary_information as t1')
+                ->join('school_information as t2', 't1.school_id', '=', 't2.id')
+
+                // exclude already synced for current term
+                ->leftJoin('beneficiary_info_sync_status as s', function ($join) use ($year, $term) {
+                    $join->on('t1.beneficiary_id', '=', 's.beneficiary_id')
+                        ->where('s.year', $year)
+                        ->where('s.term', $term);
+                })
+
+                ->select(
+                    't1.id',
+                    't1.beneficiary_id',
+                    't1.household_id',
+                    't1.exam_school_id',
+                    't1.school_id',
+                    't1.cwac_id',
+                    't1.acc_id',
+                    't1.ward_id',
+                    't1.constituency_id',
+                    't1.district_id',
+                    't1.province_id',
+                    't1.cwac_txt',
+                    't1.district_txt',
+                    DB::raw('t2.district_id as sch_district_id'),
+                    DB::raw('decrypt(t1.first_name) as first_name'),
+                    DB::raw('decrypt(t1.last_name) as last_name'),
+                    't1.dob',
+                    't1.verified_dob',
+                    't1.relation_to_hhh',
+                    't1.school_going',
+                    't1.qualified_sec_sch',
+                    't1.willing_to_return_sch',
+                    't1.highest_grade',
+                    't1.exam_grade',
+                    't1.current_school_grade',
+                    't1.exam_number'
+                )
+
+                // business filters
+                ->where('t1.beneficiary_status', 4)
+                ->where('t1.is_checklist_verified', 0)
+                ->where('t1.enrollment_status', 1)
+                ->where('t1.verification_recommendation', 1)
+
+                // exclude synced
+                ->whereNull('s.id');
+
+            // count query
+            $count_qry = DB::table('beneficiary_information as t1')
+                ->join('school_information as t2', 't1.school_id', '=', 't2.id')
+
+                // same join for consistency
+                ->leftJoin('beneficiary_info_sync_status as s', function ($join) use ($year, $term) {
+                    $join->on('t1.beneficiary_id', '=', 's.beneficiary_id')
+                        ->where('s.year', $year)
+                        ->where('s.term', $term);
+                })
+
+                ->selectRaw('COUNT(t1.id) as id_count')
+
+                ->where('t1.beneficiary_status', 4)
+                ->where('t1.is_checklist_verified', 0)
+                ->where('t1.enrollment_status', 1)
+                ->where('t1.verification_recommendation', 1)
+
+                // exclude synced
+                ->whereNull('s.id');
+
+            // apply district filter
+            if ($district_id) {
+                $qry->where('t2.district_id', $district_id);
+                $count_qry->where('t2.district_id', $district_id);
+            } else {
+                // apply pagination
+                $qry->where('t1.id', '>=', $start);
+                $qry->where('t1.id', '<=', $limit);
+            }
+
+            // fetch count and data
+            $total_active = $count_qry->value('id_count');
+            $data = $qry->get();
+
+            // base response
+            $res = [
+                'success' => true,
+                'message' => 'Records fetched successfully',
+                'year' => $year,
+                'term' => $term,
+                'total_active_in_table' => $total_active,
+                'results' => $data
+            ];
+
+            // add debug info only when requested
+            if ($debug) {
+
+                // count before exclusion
+                $total_before = DB::table('beneficiary_information as t1')
+                    ->join('school_information as t2', 't1.school_id', '=', 't2.id')
+                    ->where('t1.beneficiary_status', 4)
+                    ->where('t1.is_checklist_verified', 0)
+                    ->where('t1.enrollment_status', 1)
+                    ->where('t1.verification_recommendation', 1)
+                    ->when($district_id, function ($q) use ($district_id) {
+                        $q->where('t2.district_id', $district_id);
+                    })
+                    ->count();
+
+                // excluded count
+                $total_excluded = $total_before - $total_active;
+
+                // small sample of excluded ids
+                $excluded_sample = DB::table('beneficiary_information as t1')
+                    ->join('beneficiary_info_sync_status as s', function ($join) use ($year, $term) {
+                        $join->on('t1.beneficiary_id', '=', 's.beneficiary_id')
+                            ->where('s.year', $year)
+                            ->where('s.term', $term);
+                    })
+                    ->when($district_id, function ($q) use ($district_id) {
+                        $q->join('school_information as t2', 't1.school_id', '=', 't2.id')
+                        ->where('t2.district_id', $district_id);
+                    })
+                    ->limit(5)
+                    ->pluck('t1.beneficiary_id');
+
+                // attach debug data
+                $res['debug'] = [
+                    'total_before_exclusion' => $total_before,
+                    'total_excluded' => $total_excluded,
+                    'excluded_sample_ids' => $excluded_sample
+                ];
+            }
+
+        } catch (\Exception $e) {
+
+            $res = [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'results' => []
+            ];
+        }
+
         return response()->json($res);
     }
 
