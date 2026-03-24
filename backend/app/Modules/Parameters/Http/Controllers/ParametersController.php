@@ -4110,26 +4110,18 @@ class ParametersController extends BaseController
             // check debug flag
             $debug = $req->input('debug') == 1;
 
-            // get current cycle
-            $cycle = DB::table('system_settings')->first();
+            // detect current year and term from current date
+            $now = now();
+            $year = $now->year;
+            $month = $now->month;
 
-            if ($cycle) {
-                $year = $cycle->current_year;
-                $term = $cycle->current_term;
+            // determine term based on month
+            if ($month >= 1 && $month <= 4) {
+                $term = 1;
+            } elseif ($month >= 5 && $month <= 8) {
+                $term = 2;
             } else {
-                // fallback to current date logic
-                $now = now();
-                $year = $now->year;
-
-                $month = $now->month;
-
-                if ($month >= 1 && $month <= 4) {
-                    $term = 1;
-                } elseif ($month >= 5 && $month <= 8) {
-                    $term = 2;
-                } else {
-                    $term = 3;
-                }
+                $term = 3;
             }
 
             // main query
