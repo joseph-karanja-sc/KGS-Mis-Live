@@ -4214,7 +4214,7 @@ class ParametersController extends BaseController
                 'message' => 'Records fetched successfully',
                 'year' => $year,
                 'term' => $term,
-                'total_fetched' => $total_active,
+                'total_active_in_table' => $total_active,
                 'results' => $data
             ];
 
