@@ -2530,4 +2530,750 @@ class UserManagementController extends BaseController
 
     // ppmuserssetup controller methods end
 
+// ppmuserssetup controller methods start
+    
+    /**
+     * Get all PPM users with their details
+     * ppmuserssetup controller - getPpmUsers
+     */
+    public function getPpmUsers(Request $req)
+    {
+        Log::info("Fetching PPM users list");
+        try {
+            $qry = DB::table('ppmuserssetup_details as pum')
+                ->leftJoin('users', 'users.id', '=', 'pum.user_id')
+                ->leftJoin('titles', 'titles.id', '=', 'users.title_id')
+                ->leftJoin('access_points', 'access_points.id', '=', 'users.access_point_id')
+                ->leftJoin('user_images', 'users.id', '=', 'user_images.user_id')
+                ->select(
+                    'pum.*',
+                    'users.id as user_id',
+                    'titles.name as title',
+                    'access_points.name as access_point_name',
+                    DB::raw('CONCAT("/resources/images/user-profile/", user_images.saved_name) as profile_photo'),
+                    DB::raw('CONCAT(decrypt(first_name)," ",decrypt(last_name)) as fullnames'),
+                    DB::raw('decrypt(users.email) as email')
+                )
+                ->orderBy('fullnames', 'asc')
+                ->limit(500);
+            
+            $data = $qry->get();
+            $data = convertStdClassObjToArray($data);
+            
+            $res = array(
+                'success' => true,
+                'results' => $data,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Get available users not already in PPM users setup
+     * ppmuserssetup controller - getAvailablePpmUsers
+     */
+    public function getAvailablePpmUsers(Request $req)
+    {
+        Log::info("ppmuserssetup: Fetching available users for PPM setup");
+        try {
+            $query = $req->input('query');
+            // Get users that are not in ppmuserssetup_details
+            $qry = DB::table('users as u')
+                ->leftJoin('ppmuserssetup_details as pum', function($join) {
+                    $join->on('u.id', '=', 'pum.user_id');
+                })
+                ->whereNull('pum.id')
+                ->select(
+                    'u.id',
+                    DB::raw('CONCAT(decrypt(u.first_name)," ",decrypt(u.last_name)," - ",decrypt(u.email)) as fullnames'),
+                    DB::raw('decrypt(u.email) as email')
+                );
+                
+                
+            if (!empty($query)) {
+                $qry->where(function($q) use ($query) {
+                    // Use whereRaw so MySQL sees the function, not a column name
+                    $q->whereRaw('decrypt(u.first_name) LIKE ?', ["%{$query}%"])
+                    ->orWhereRaw('decrypt(u.last_name) LIKE ?', ["%{$query}%"])
+                    ->orWhereRaw('decrypt(u.email) LIKE ?', ["%{$query}%"]);
+                });
+            }
+
+            $qry->orderBy('fullnames', 'asc')
+                ->limit(500);
+            $data = $qry->get();
+            $data = convertStdClassObjToArray($data);
+            
+            Log::info("ppmuserssetup: Found " . count($data) . " available users");
+            
+            $res = array(
+                'success' => true,
+                'results' => $data,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            Log::error("ppmuserssetup: Error fetching available users - " . $e->getMessage());
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Save new PPM user
+     * ppmuserssetup controller - saveNewPpmUser
+     */
+    public function saveNewPpmUser(Request $req)
+    {
+        Log::info("ppmuserssetup: Saving new PPM user");
+        // Check if user is authenticated first
+        if (!Auth::check()) {
+            return response()->json(['error' => 'User not authenticated'], 401);
+        }
+        $user_id = Auth::user()->id;
+        
+        try {
+            $selected_user_id = $req->input('user_id');
+            $account_type = $req->input('account_type');
+            $has_kgs_app_access = $req->boolean('has_kgs_app_access');
+            $has_ppm_app_access = $req->boolean('has_ppm_app_access');
+            
+            // Check if user already exists in ppmuserssetup_details
+            $existing = DB::table('ppmuserssetup_details')
+                ->where('user_id', $selected_user_id)
+                ->first();
+            
+            if ($existing) {
+                // Update existing
+                DB::table('ppmuserssetup_details')
+                    ->where('id', $existing->id)
+                    ->update([
+                        'account_type' => $account_type,
+                        'has_kgs_app_access' => $has_kgs_app_access,
+                        'has_ppm_app_access' => $has_ppm_app_access,
+                        'updated_at' => Carbon::now(),
+                        'updated_by' => $user_id
+                    ]);
+                $detail_id = $existing->id;
+                Log::info("ppmuserssetup: Updated existing PPM user detail_id=$detail_id");
+            } else {
+                // Insert new
+                $detail_id = DB::table('ppmuserssetup_details')->insertGetId([
+                    'user_id' => $selected_user_id,
+                    'account_type' => $account_type,
+                    'has_kgs_app_access' => $has_kgs_app_access,
+                    'has_ppm_app_access' => $has_ppm_app_access,
+                    'created_at' => Carbon::now(),
+                    'created_by' => $user_id
+                ]);
+                Log::info("ppmuserssetup: Created new PPM user detail_id=$detail_id");
+            }
+            
+            $res = array(
+                'success' => true,
+                'detail_id' => $detail_id,
+                'message' => 'PPM user created successfully'
+            );
+        } catch (\Exception $e) {
+            Log::error("ppmuserssetup: Error saving new PPM user - " . $e->getMessage());
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Get PPM user details for a specific user
+     * ppmuserssetup controller - getPpmUserDetail
+     */
+    public function getPpmUserDetail(Request $req)
+    {
+        $user_id = $req->input('user_id');
+        try {
+            $detail = DB::table('ppmuserssetup_details as pum')
+                ->leftJoin('users', 'users.id', '=', 'pum.user_id')
+                ->leftJoin('titles', 'titles.id', '=', 'users.title_id')
+                ->leftJoin('access_points', 'access_points.id', '=', 'users.access_point_id')
+                ->leftJoin('user_images', 'users.id', '=', 'user_images.user_id')
+                ->select(
+                    'pum.*',
+                    'titles.name as title',
+                    'access_points.name as access_point_name',
+                    DB::raw('CONCAT("/resources/images/user-profile/", user_images.saved_name) as profile_photo'),
+                    DB::raw('CONCAT(decrypt(first_name)," ",decrypt(last_name)) as fullnames'),
+                    DB::raw('decrypt(users.email) as email')
+                )
+                ->where('pum.user_id', $user_id)
+                ->first();
+            
+            if ($detail) {
+                // Get allocated districts
+                $districts = DB::table('ppmuserssetup_allocated_districts as pud')
+                    ->join('districts', 'districts.id', '=', 'pud.district_id')
+                    ->where('pud.ppm_user_detail_id', $detail->id)
+                    ->select('districts.id', DB::raw('districts.name as district_name'))
+                    ->get();
+                
+                // Get allocated schools
+                $schools = DB::table('ppmuserssetup_allocated_schools as pus')
+                    ->join('school_information', 'school_information.id', '=', 'pus.school_id')
+                    ->where('pus.ppm_user_detail_id', $detail->id)
+                    ->select('school_information.id', DB::raw('school_information.name as school_name'))
+                    ->get();
+                
+                $res = array(
+                    'success' => true,
+                    'detail' => $detail,
+                    'districts' => $districts,
+                    'schools' => $schools,
+                    'message' => 'All is well'
+                );
+            } else {
+                $res = array(
+                    'success' => true,
+                    'detail' => null,
+                    'districts' => [],
+                    'schools' => [],
+                    'message' => 'No PPM user detail found'
+                );
+            }
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Save PPM user details (account type and app access)
+     * ppmuserssetup controller - savePpmUserDetail
+     */
+    public function savePpmUserDetail(Request $req)
+    {
+        Log::info("ppmuserssetup: Saving PPM user detail");
+        $user_id = Auth::user()->id;
+        $account_type = $req->input('account_type');
+        // Handle checkbox values - convert to boolean/integer
+        $has_kgs_app_access = $req->input('has_kgs_app_access') == '1' || $req->input('has_kgs_app_access') === true || $req->input('has_kgs_app_access') === 'true' ? 1 : 0;
+        $has_ppm_app_access = $req->input('has_ppm_app_access') == '1' || $req->input('has_ppm_app_access') === true || $req->input('has_ppm_app_access') === 'true' ? 1 : 0;
+        
+        Log::info("ppmuserssetup: Saving user detail - account_type=$account_type, kgs=$has_kgs_app_access, ppm=$has_ppm_app_access");
+        
+        try {
+            $detail = DB::table('ppmuserssetup_details')
+                ->where('user_id', $req->input('original_user_id'))
+                ->first();
+            
+            if ($detail) {
+                DB::table('ppmuserssetup_details')
+                    ->where('id', $detail->id)
+                    ->update([
+                        'account_type' => $account_type,
+                        'has_kgs_app_access' => $has_kgs_app_access,
+                        'has_ppm_app_access' => $has_ppm_app_access,
+                        'updated_at' => Carbon::now(),
+                        'updated_by' => $user_id
+                    ]);
+                $detail_id = $detail->id;
+            } else {
+                $detail_id = DB::table('ppmuserssetup_details')->insertGetId([
+                    'user_id' => $req->input('original_user_id'),
+                    'account_type' => $account_type,
+                    'has_kgs_app_access' => $has_kgs_app_access,
+                    'has_ppm_app_access' => $has_ppm_app_access,
+                    'created_at' => Carbon::now(),
+                    'created_by' => $user_id
+                ]);
+            }
+
+            // clean-up districts and schools if account type is school accountant and leave the first entry if multiple exist
+            if ($account_type === 'school_accountant') {
+                // Get allocated districts
+                $allocatedDistricts = DB::table('ppmuserssetup_allocated_districts')
+                    ->where('ppm_user_detail_id', $detail_id)
+                    ->get();
+                
+                if ($allocatedDistricts->count() > 1) {
+                    // Keep the first entry and delete the rest
+                    $firstDistrictId = $allocatedDistricts->first()->id;
+                    DB::table('ppmuserssetup_allocated_districts')
+                        ->where('ppm_user_detail_id', $detail_id)
+                        ->where('id', '!=', $firstDistrictId)
+                        ->delete();
+                }
+
+                // Get allocated schools
+                $allocatedSchools = DB::table('ppmuserssetup_allocated_schools')
+                    ->where('ppm_user_detail_id', $detail_id)
+                    ->get();
+                
+                if ($allocatedSchools->count() > 1) {
+                    // Keep the first entry and delete the rest
+                    $firstSchoolId = $allocatedSchools->first()->id;
+                    DB::table('ppmuserssetup_allocated_schools')
+                        ->where('ppm_user_detail_id', $detail_id)
+                        ->where('id', '!=', $firstSchoolId)
+                        ->delete();
+                }
+            }
+
+            /** OLD COMPATIBILITY */ // Will be deleted by Jose
+            DB::table('users')
+                ->where('id', $req->input('original_user_id'))
+                ->update([
+                    'has_kgs_app_access' => $has_kgs_app_access,
+                    'has_ppm_app_access' => $has_ppm_app_access,
+                    'updated_at' => now(),
+                    'updated_by' => $user_id
+                ]);
+
+            // update sa_app_user_details 
+            DB::table('sa_app_user_details')
+                ->where('users_id', $req->input('original_user_id'))
+                ->update([
+                    'zonal_accountant' => ($account_type === 'zonal_accountant' ? 1 : 0),
+                    'updated_at' => now(),
+                    'updated_by' => $user_id
+            ]);
+
+            /* END OF OLD COMPATIBILITY */
+            
+            $res = array(
+                'success' => true,
+                'detail_id' => $detail_id,
+                'message' => 'PPM user detail saved successfully'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Save allocated districts for a PPM user
+     * ppmuserssetup controller - savePpmUserDistricts
+     */
+    public function savePpmUserDistricts(Request $req)
+    {
+        $user_id = $req->input('user_id');
+        $district_ids = $req->input('district_ids', []);
+        $current_user_id = $this->user_id;
+        
+        try {
+            // Get the detail record
+            $detail = DB::table('ppmuserssetup_details')
+                ->where('user_id', $user_id)
+                ->first();
+            
+            if (!$detail) {
+                $res = array(
+                    'success' => false,
+                    'message' => 'PPM user detail not found. Please save user details first.'
+                );
+                return response()->json($res);
+            }
+
+            // Validate district accountant constraint (max 1 district)
+            if ($detail->account_type === 'school_accountant' && count($district_ids) > 1) {
+                $res = array(
+                    'success' => false,
+                    'message' => 'School accountants can only be assigned to one district.'
+                );
+                return response()->json($res);
+            }
+            
+            $districtsInfo = DB::table('districts')
+                ->whereIn('id', $district_ids)
+                ->select('id', 'name as district_name')
+                ->get()
+                ->keyBy('id');
+
+            
+            DB::table('ppmuserssetup_allocated_districts')
+                ->where('ppm_user_detail_id', $detail->id)
+                ->delete();
+            
+            if (!empty($district_ids)) {
+                $insertData = [];
+                foreach ($district_ids as $id) {
+                    $info = $districtsInfo->get($id);
+                    if ($info) {
+                        $insertData[] = [
+                            'ppm_user_detail_id' => $detail->id,
+                            'district_id'        => $id,
+                            'district_name'      => $info->district_name, // Mapped to your new column
+                            'created_at'         => Carbon::now(),
+                            'updated_at'         => Carbon::now()
+                        ];
+                    }
+                }
+                
+                if (!empty($insertData)) {
+                    DB::table('ppmuserssetup_allocated_districts')->insert($insertData);
+                }
+            }
+
+            /** OLD COMPATIBILITY */ // Jose delete this
+            if (!empty($district_ids)) {
+                $firstDistrictId = $district_ids[0];
+                $districtInfo = $districtsInfo->get($firstDistrictId);
+                
+                if ($districtInfo) {
+                    // Get first allocated school for the assigned string
+                    $firstSchool = DB::table('ppmuserssetup_allocated_schools')
+                        ->where('ppm_user_detail_id', $detail->id)
+                        ->first();
+                    
+                    $assignedString = $firstSchool 
+                        ? $firstSchool->school_id . ' - ' . $firstSchool->school_name . ' - ' . $districtInfo->district_name
+                        : '0 - N/A - ' . $districtInfo->district_name;
+
+                    DB::table('sa_app_user_details')->updateOrInsert(
+                        ['user_id' => $user_id],
+                        [
+                            'uuid' => DB::table('users')->where('id', $user_id)->value('uuid'),
+                            'district_assigned_id' => $firstDistrictId,
+                            'district_assigned_string' => $districtInfo->district_name,
+                            'school_assigned_string' => $assignedString,
+                            'updated_at' => now()
+                        ]
+                    );
+
+                    // update sa_app_user_details 
+                    DB::table('sa_app_user_details')
+                    ->where('users_id', $req->input('original_user_id'))
+                    ->update([
+                        'zonal_accountant' => ($account_type === 'zonal_accountant' ? 1 : 0),
+                        'updated_at' => now(),
+                        'updated_by' => $user_id
+                    ]);
+                }
+            } 
+            /* END OF OLD COMPATIBILITY */
+            
+            $res = array(
+                'success' => true,
+                'message' => 'Districts saved successfully'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Save allocated schools for a PPM user
+     * ppmuserssetup controller - savePpmUserSchools
+     */
+    public function savePpmUserSchools(Request $req)
+    {
+        $user_id = $req->input('user_id');
+        $school_ids = $req->input('school_ids', []);
+        $current_user_id = $this->user_id;
+        Log::info("ppmuserssetup: Saving schools for user_id=$user_id, school_ids=" . json_encode($school_ids));
+
+        try {
+            // Get the detail record
+            $detail = DB::table('ppmuserssetup_details')
+                ->where('user_id', $user_id)
+                ->first();
+            
+            if (!$detail) {
+                $res = array(
+                    'success' => false,
+                    'message' => 'PPM user detail not found. Please save user details first.'
+                );
+                return response()->json($res);
+            }
+            
+            // Validate school accountant constraint (max 1 school)
+            if ($detail->account_type === 'school_accountant' && count($school_ids) > 1) {
+                $res = array(
+                    'success' => false,
+                    'message' => 'School accountants can only be assigned to one school.'
+                );
+                return response()->json($res);
+            }
+            
+            $schoolsInfo = DB::table('school_information as s')
+                ->leftJoin('districts as d', 's.district_id', '=', 'd.id')
+                ->leftJoin('cwac as c', 's.cwac_id', '=', 'c.id')
+                ->whereIn('s.id', $school_ids)
+                ->select('s.id', DB::raw('s.name as school_name'), 's.code as emis_code', 's.cwac_id', 'c.name as cwac_name', 'd.name as district_name')
+                ->get()
+                ->keyBy('id'); 
+
+            
+            DB::table('ppmuserssetup_allocated_schools')
+                ->where('ppm_user_detail_id', $detail->id)
+                ->delete();
+            
+            
+            if (!empty($school_ids)) {
+                $insertData = [];
+                foreach ($school_ids as $id) {
+                    $info = $schoolsInfo->get($id);
+                    if ($info) {
+                        $insertData[] = [
+                            'ppm_user_detail_id' => $detail->id,
+                            'school_id'          => $id,
+                            'school_name'        => $id.' - '.$info->school_name.' - '.$info->district_name,
+                            'emis_code'          => $info->emis_code,
+                            'cwac_id'            => $info->cwac_id,
+                            'cwac_name'          => $info->cwac_name,
+                            'created_at'         => Carbon::now(),
+                            'updated_at'         => Carbon::now()
+                        ];
+                    }
+                }
+                
+                if (!empty($insertData)) {
+                    DB::table('ppmuserssetup_allocated_schools')->insert($insertData);
+                }
+            }
+
+            /** OLD COMPATIBILITY */ // Jose delete this
+            // Save first school to old sa_app_user_details table
+            if (!empty($school_ids)) {
+                $firstSchoolId = $school_ids[0];
+                $schoolInfo = $schoolsInfo->get($firstSchoolId);
+                
+                if ($schoolInfo) {
+                    $assignedString = $firstSchoolId . ' - ' . $schoolInfo->school_name. ' - ' . $schoolInfo->district_name;
+                    
+                    // Get cwac info
+                    $cwacId = $schoolInfo->cwac_id ?? 0;
+                    $cwacName = $schoolInfo->cwac_name ?: 'N/A';
+
+                    DB::table('sa_app_user_details')->updateOrInsert(
+                        ['user_id' => $user_id],
+                        [
+                            'uuid' => DB::table('users')->where('id', $user_id)->value('uuid'),
+                            'school_assigned_id' => $firstSchoolId,
+                            'school_assigned_emis' => $schoolInfo->emis_code,
+                            'school_assigned_string' => $assignedString,
+                            'school_cwac_id' => $cwacId,
+                            'school_cwac_string' => $cwacName,
+                            'updated_at' => now()
+                        ]
+                    );
+                }
+            }
+            /* END OF OLD COMPATIBILITY */
+            
+            $res = array(
+                'success' => true,
+                'message' => 'Schools saved successfully'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Get available districts for PPM user assignment
+     * ppmuserssetup controller - getPpmOpenDistricts
+     */
+    public function getPpmOpenDistricts(Request $req)
+    {
+        $user_id = $req->input('user_id');
+        try {
+            $qry = DB::table('districts');
+            
+            if (isset($user_id) && $user_id != '') {
+                // Get the PPM user detail id
+                $detail = DB::table('ppmuserssetup_details')
+                    ->where('user_id', $user_id)
+                    ->first();
+                
+                if ($detail) {
+                    $qry->whereNotIn('districts.id', function ($query) use ($detail) {
+                        $query->select(DB::raw('ppmuserssetup_allocated_districts.district_id'))
+                            ->from('ppmuserssetup_allocated_districts')
+                            ->where('ppmuserssetup_allocated_districts.ppm_user_detail_id', $detail->id);
+                    });
+                }
+            }
+            
+            // Change name to district_name for frontend display
+            $qry->select('districts.id', DB::raw('districts.name as district_name'));
+
+            $data = $qry->orderBy('district_name', 'asc')->get();
+            $data = convertStdClassObjToArray($data);
+            
+            $res = array(
+                'success' => true,
+                'results' => $data,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Get assigned districts for a PPM user
+     * ppmuserssetup controller - getPpmAssignedDistricts
+     */
+    public function getPpmAssignedDistricts(Request $req)
+    {
+        $user_id = $req->input('user_id');
+        try {
+            $detail = DB::table('ppmuserssetup_details')
+                ->where('user_id', $user_id)
+                ->first();
+            
+            if (!$detail) {
+                $res = array(
+                    'success' => true,
+                    'results' => [],
+                    'message' => 'No PPM user detail found'
+                );
+                return response()->json($res);
+            }
+            
+            $data = DB::table('ppmuserssetup_allocated_districts as pud')
+                ->join('districts', 'districts.id', '=', 'pud.district_id')
+                ->where('pud.ppm_user_detail_id', $detail->id)
+                ->select('districts.id', DB::raw('districts.name as district_name'))
+                ->get();
+            $data = convertStdClassObjToArray($data);
+            
+            $res = array(
+                'success' => true,
+                'results' => $data,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Get available schools for PPM user assignment
+     * ppmuserssetup controller - getPpmOpenSchools
+     */
+    public function getPpmOpenSchools(Request $req)
+    {
+        $user_id = $req->input('user_id');
+        $district_id = $req->input('district_id'); // Optional filter by district
+        
+        try {
+            $qry = DB::table('school_information');
+            
+            // Filter by district if provided
+            if (isset($district_id) && $district_id != '') {
+                $qry->where('district_id', $district_id);
+            }
+            
+            if (isset($user_id) && $user_id != '') {
+                // Get the PPM user detail id
+                $detail = DB::table('ppmuserssetup_details')
+                    ->where('user_id', $user_id)
+                    ->first();
+                
+                if ($detail) {
+                    $qry->whereNotIn('school_information.id', function ($query) use ($detail) {
+                        $query->select(DB::raw('ppmuserssetup_allocated_schools.school_id'))
+                            ->from('ppmuserssetup_allocated_schools')
+                            ->where('ppmuserssetup_allocated_schools.ppm_user_detail_id', $detail->id);
+                    });
+                }
+            }
+
+            // Change name to school_name for frontend display
+            $qry->select('school_information.id', DB::raw('school_information.name as school_name'), DB::raw('school_information.code as emis_code'));
+            $qry->where('school_information.isDeleted', 0); // Only active schools
+            
+            $data = $qry->orderBy('school_name', 'asc')->get();
+            $data = convertStdClassObjToArray($data);
+            
+            $res = array(
+                'success' => true,
+                'results' => $data,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    /**
+     * Get assigned schools for a PPM user
+     * ppmuserssetup controller - getPpmAssignedSchools
+     */
+    public function getPpmAssignedSchools(Request $req)
+    {
+        $user_id = $req->input('user_id');
+        try {
+            $detail = DB::table('ppmuserssetup_details')
+                ->where('user_id', $user_id)
+                ->first();
+            
+            if (!$detail) {
+                $res = array(
+                    'success' => true,
+                    'results' => [],
+                    'message' => 'No PPM user detail found'
+                );
+                return response()->json($res);
+            }
+            
+            $data = DB::table('ppmuserssetup_allocated_schools as pus')
+                ->join('school_information', 'school_information.id', '=', 'pus.school_id')
+                ->where('pus.ppm_user_detail_id', $detail->id)
+                ->select('school_information.id', DB::raw('school_information.name as school_name'), DB::raw('school_information.code as emis_code'))
+                ->get();
+            $data = convertStdClassObjToArray($data);
+            
+            $res = array(
+                'success' => true,
+                'results' => $data,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    // ppmuserssetup controller methods end
+
 }

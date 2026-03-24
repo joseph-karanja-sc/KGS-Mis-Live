@@ -65,5 +65,9 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     Route::get('/sa-trans-summary', 'MobileController@getSchoolTransactionSummary');
     Route::get('/trans-beneficiary-images', 'MobileController@getImages');
  
+    Route::post('/encrypt-string', 'MobileController@encryptString');
+    Route::get('/download-payment-list/{filename}', 'MobileController@downloadPaymentList')
+    ->name('download.payment.list')
+    ->middleware('signed');
 
 });

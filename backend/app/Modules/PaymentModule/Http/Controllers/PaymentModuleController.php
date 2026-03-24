@@ -12917,10 +12917,10 @@ public function uploadPaymentGrantList(Request $request)
             $checklist_form_id = $post_data['checklist_form_id'];
             $school_headteacher = $req->input('school_headteacher');
             $headteacher_tel_no = $req->input('headteacher_tel_no');
-            $school_guidance_teacher_name = $req->input('school_guidance_counselling_teacher');
-            $school_guidance_teacher_phone = $req->input('guidance_counselling_teacher_phone_number');
+            $school_guidance_teacher_name = $req->input('guidance_counselling_teacher');
+            $school_guidance_teacher_phone = $req->input('guidance_counselling_teacher_phone_no');
             $where_data = array(
-                'designation_id' => 1,
+                'designation_id' => "1",
                 'school_id' => $school_id
             );
             $table_data = array(
@@ -12934,7 +12934,7 @@ public function uploadPaymentGrantList(Request $request)
             //job  16/3/2022
             //school guidance teacher info
             $where_data = array(
-                'designation_id' => 2,//school guidance designation
+                'designation_id' => "2",//school guidance designation
                 'school_id' => $school_id
             );
             $table_data = array(

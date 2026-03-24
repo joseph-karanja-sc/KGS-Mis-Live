@@ -21,6 +21,10 @@ use GuzzleHttp\Exception\RequestException;
 use Illuminate\Support\Facades\Validator;
 use Ramsey\Uuid\Uuid;
 
+use TCPDF;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Storage;
+
 class MobileController extends Controller
 {
     use GrmModuleTrait;
@@ -336,7 +340,8 @@ class MobileController extends Controller
         */
         try {
             $client = new \GuzzleHttp\Client([
-                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
+                // 'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
+                'base_uri' => config('app.pg_base_url') . '/api/',
                 'timeout'  => 15,
             ]);
 
@@ -491,7 +496,8 @@ class MobileController extends Controller
             ->select(
                 'district_assigned_string',
                 'school_assigned_string',
-                'school_cwac_string'
+                'school_cwac_string',
+                'zonal_accountant'
             )
             ->first();
 
@@ -511,6 +517,7 @@ class MobileController extends Controller
                     'district_assigned' => $ppmAppUser->district_assigned_string ?? null,
                     'school_assigned'   => $ppmAppUser->school_assigned_string ?? null,
                     'school_cwac'       => $ppmAppUser->school_cwac_string ?? null,
+                    'zonal_accountant'  => $ppmAppUser->zonal_accountant ?? null,
                 ],
             ], 200)
             ->header('Content-Type', 'application/json')
@@ -526,7 +533,7 @@ class MobileController extends Controller
     }
 
     //get beneficiary payment list
-    public function getBeneficiariesBySchool(Request $request)
+    public function getBeneficiariesBySchoolOlddz(Request $request)
     {
         $userUuid = $request->header('UUID');
         if (empty($userUuid)) {
@@ -664,6 +671,198 @@ class MobileController extends Controller
             'payment_list' => $beneficiaries
         ]);
 
+    }
+
+    public function getBeneficiariesBySchool(Request $request)
+    {
+
+        // Validate UUID
+        $userUuid = $request->header('UUID');
+        if (empty($userUuid)) {
+            return response()->json(['message' => 'Please provide UUID'], 400);
+        }
+
+        $user = DB::table('users')->where('uuid', $userUuid)->first();
+        if (!$user) {
+            return response()->json(['message' => 'This user does not exist'], 404);
+        }
+
+        // Validate School Access
+        $userDetails = DB::table('sa_app_user_details')
+            ->where('uuid', $userUuid)
+            ->first();
+
+        if (!$userDetails || empty($userDetails->school_assigned_id)) {
+            return response()->json(['message' => 'User has no assigned school.'], 403);
+        }
+
+        $schoolCode = $request->query('school');
+        if (empty($schoolCode)) {
+            return response()->json(['message' => 'Please provide a school code'], 400);
+        }
+
+        $assignedSchoolCode = explode(' ', $userDetails->school_assigned_id)[0];
+        if ($assignedSchoolCode !== $schoolCode) {
+            return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
+        }
+
+        $schoolInfo = DB::table('school_information')
+            ->where('id', $schoolCode)
+            ->first();
+
+        if (!$schoolInfo) {
+            return response()->json(['message' => 'Invalid school code provided'], 404);
+        }
+
+        $schoolId = $schoolInfo->id;
+
+        // Generate Payment Batch ID
+        $paymentPeriod = now()->format('Y-m');
+        $randomNumber = strtoupper(bin2hex(random_bytes(6)));
+        $schoolNameHyphenated = str_replace(' ', '-', $userDetails->school_assigned_string);
+        $paymentBatchId = $schoolNameHyphenated . '-' . $paymentPeriod . '-' . $randomNumber;
+
+        // Fetch Beneficiaries
+        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
+            ->where('school_id', $schoolId)
+            ->where('payment_status_id', 1)
+            ->select(DB::raw("
+                COALESCE(transaction_id, 'N/A') AS TransactionID,
+                COALESCE(beneficiary_no, 'N/A') AS BeneficiaryNumber,
+                COALESCE(decrypt(first_name), 'N/A') AS FirstName,
+                COALESCE(decrypt(last_name), 'N/A') AS LastName,
+                COALESCE(school_name, 'N/A') AS School,
+                COALESCE(school_district, 'N/A') AS SchoolDistrict,
+                COALESCE(school_province, 'N/A') AS Province,
+                COALESCE(cwac_name, 'N/A') AS SchoolCwac,
+                COALESCE(mobile_phone_parent_guardian, 'N/A') AS GuardianPhoneNumber,
+                COALESCE(hhh_nrc_number, 'N/A') AS GuardianNRC,
+                COALESCE(decrypt(hhh_fname), 'N/A') AS GuardianFirstName,
+                COALESCE(decrypt(hhh_lname), 'N/A') AS GuardianLastName,
+                COALESCE(grant_amount, 0) AS EducationGrantAmount,
+                COALESCE(transaction_time_initiated, 'N/A') AS TransactionInitiatedAt
+            "))
+            ->get();
+
+        if ($beneficiaries->isEmpty()) {
+            return response()->json(['message' => 'No beneficiaries found for the provided school.'], 404);
+        }
+
+        // Logging
+        DB::table('sa_user_activity_logs')->insert([
+            'user_uuid'    => $userUuid,
+            'activity_type'=> 'download beneficiary list',
+            'ip_address'   => $request->ip(),
+            'user_agent'   => $request->header('User-Agent'),
+            'created_at'   => now(),
+        ]);
+
+        DB::table('sa_app_payment_list_downloads_log')->insert([
+            'downloaded_by' => $userUuid,
+            'start_timestamp' => now(),
+            'end_timestamp' => now(),
+            'download_successful' => !$beneficiaries->isEmpty(),
+            'school_downloaded' => $userDetails->school_assigned_id,
+            'payment_batch_id' => $paymentBatchId
+        ]);
+
+        DB::table('sa_app_payment_batches')->insert([
+            'PaymentBatchID' => $paymentBatchId,
+            'SchoolID' => $schoolId,
+            'UserUUID' => $userUuid,
+            'DateGenerated' => now(),
+            'Status' => 'Pending',
+            'NumberOfStudents' => $beneficiaries->count(),
+            'AmountDisbursed' => 0,
+            'AmountReturned' => 0
+        ]);
+
+        // Head Teacher & Guidance Teacher
+        $contacts = DB::table('school_contactpersons')
+            ->where('school_id', $userDetails->school_assigned_id)
+            ->whereIn('designation_id', [1, 2])
+            ->select('designation_id', 'full_names')
+            ->get()
+            ->keyBy('designation_id');
+
+        $headTeacher = optional($contacts->get(1))->full_names ?? 'N/A';
+        $guidanceTeacher = optional($contacts->get(2))->full_names ?? 'N/A';
+
+        // Generate PDF Using TCPDF
+        $fileName = $paymentBatchId . '.pdf';
+        $filePath = storage_path('app/public/payment_lists/' . $fileName);
+
+        $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetMargins(10, 10, 10);
+        $pdf->SetAutoPageBreak(true, 10);
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->AddPage();
+
+        $html = '<h3>Payment Batch ID: '.$paymentBatchId.'</h3>
+        <p><strong>School:</strong> '.$userDetails->school_assigned_string.'</p>
+        <table border="1" cellpadding="3">
+            <tr>
+                <th width="15">#</th>
+                <th width="50">Ben. No</th>
+                <th width="70">Full Name</th>
+                <th width="35">Grant</th>
+                <th width="70">Guardian</th>
+            </tr>';
+
+        $counter = 1;
+        $totalAmount = 0;
+
+        foreach ($beneficiaries as $row) {
+
+            $html .= '<tr>
+                <td align="center">'.$counter.'</td>
+                <td align="center">'.$row->BeneficiaryNumber.'</td>
+                <td>'.$row->FirstName.' '.$row->LastName.'</td>
+                <td align="right">'.number_format($row->EducationGrantAmount, 2).'</td>
+                <td>'.$row->GuardianFirstName.' '.$row->GuardianLastName.'</td>
+            </tr>';
+
+            $totalAmount += $row->EducationGrantAmount;
+            $counter++;
+        }
+
+        $html .= '<tr>
+            <td colspan="3" align="right"><strong>TOTAL</strong></td>
+            <td align="right"><strong>'.number_format($totalAmount, 2).'</strong></td>
+            <td></td>
+        </tr></table>';
+
+        $pdf->writeHTML($html, true, false, true, false, '');
+        $pdf->Output($filePath, 'F');
+
+        // Signed URL (10 Minutes)
+        $downloadUrl = URL::temporarySignedRoute(
+            'download.payment.list',
+            now()->addMinutes(10),
+            ['filename' => $fileName]
+        );
+
+        // Final JSON
+        return response()->json([
+            'payment_batch_id' => $paymentBatchId,
+            'school' => $userDetails->school_assigned_string,
+            'head_teacher' => $headTeacher,
+            'guidance_teacher' => $guidanceTeacher,
+            'total_beneficiaries' => $beneficiaries->count(),
+            'pdf_download_link' => $downloadUrl,
+            'payment_list' => $beneficiaries
+        ]);
+    }
+
+    public function downloadPaymentList(Request $request, $filename)
+    {
+        $path = storage_path('app/public/payment_lists/' . $filename);
+
+        if (!file_exists($path)) {
+            abort(404);
+        }
+
+        return response()->download($path);
     }
 
     //post transaction status
