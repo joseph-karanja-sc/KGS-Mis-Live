@@ -4033,7 +4033,7 @@ class ParametersController extends BaseController
     }
 
     
-    public function getBeneficiariesForMobilev1(Request $req)
+    public function getBeneficiariesForMobile(Request $req)
     {
         try {
             $start=$req->input('start_at') ? $req->input('start_at') : 0;
@@ -4097,7 +4097,7 @@ class ParametersController extends BaseController
     }
 
     //added 24 march 2026 by jose
-    public function getBeneficiariesForMobile(Request $req)
+    public function getBeneficiariesForMobilev1(Request $req)
     {
         try {
             // get pagination params
