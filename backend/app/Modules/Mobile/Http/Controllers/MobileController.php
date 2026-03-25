@@ -640,16 +640,29 @@ class MobileController extends Controller
             'payment_batch_id' => $paymentBatchId
         ]);
 
-        DB::table('sa_app_payment_batches')->insert([
-            'PaymentBatchID' => $paymentBatchId,
-            'SchoolID' => $schoolId,
-            'UserUUID' => $userUuid,
-            'DateGenerated' => now(),
-            'Status' => 'Pending',
-            'NumberOfStudents' => $beneficiaries->count(),
-            'AmountDisbursed' => 0,
-            'AmountReturned' => 0
-        ]);
+        // DB::table('sa_app_payment_batches')->insert([
+        //     'PaymentBatchID' => $paymentBatchId,
+        //     'SchoolID' => $schoolId,
+        //     'UserUUID' => $userUuid,
+        //     'DateGenerated' => now(),
+        //     'Status' => 'Pending',
+        //     'NumberOfStudents' => $beneficiaries->count(),
+        //     'AmountDisbursed' => 0,
+        //     'AmountReturned' => 0
+        // ]);
+
+        DB::table('sa_app_payment_batches')->updateOrInsert(
+            ['PaymentBatchID' => $paymentBatchId], // check existing
+            [
+                'SchoolID' => $schoolId,
+                'UserUUID' => $userUuid,
+                'DateGenerated' => now(),
+                'Status' => 'Pending',
+                'NumberOfStudents' => $beneficiaries->count(),
+                'AmountDisbursed' => 0,
+                'AmountReturned' => 0
+            ]
+        );
 
         // Head Teacher & Guidance Teacher
         $contacts = DB::table('school_contactpersons')
