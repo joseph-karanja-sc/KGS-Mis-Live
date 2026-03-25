@@ -533,146 +533,6 @@ class MobileController extends Controller
     }
 
     //get beneficiary payment list
-    public function getBeneficiariesBySchoolOlddz(Request $request)
-    {
-        $userUuid = $request->header('UUID');
-        if (empty($userUuid)) {
-            return response()->json(['message' => 'Please provide UUID'], 400);
-        }
-
-        //Get user from users table
-        $user = DB::table('users')->where('uuid', $userUuid)->first();
-        if (!$user) {
-            return response()->json(['message' => 'This user does not exist'], 404);
-        }
-
-        //Get assigned school (string + ID) from user details table
-        $userDetails = DB::table('sa_app_user_details')
-            ->where('uuid', $userUuid)
-            ->first();
-
-        if (!$userDetails || empty($userDetails->school_assigned_id)) {
-            return response()->json(['message' => 'User has no assigned school.'], 403);
-        }
-
-        $schoolCode = $request->query('school');
-        if (empty($schoolCode)) {
-            return response()->json(['message' => 'Please provide a school code'], 400);
-        }
-
-        //Validate access — does the user match the requested school?
-        $assignedSchoolCode = explode(' ', $userDetails->school_assigned_id)[0];
-        if ($assignedSchoolCode !== $schoolCode) {
-            return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
-        }
-
-        //Validate that school code exists in DB
-        $schoolInfo = DB::table('school_information')->where('id', $schoolCode)->first();
-        if (!$schoolInfo) {
-            return response()->json(['message' => 'Invalid school code provided'], 404);
-        }
-        $schoolId = $schoolInfo->id;
-
-        //Create Payment Batch ID
-        $paymentPeriod = now()->format('Y-m');
-        $randomNumber = strtoupper(bin2hex(random_bytes(6))); // 12-character random string
-        $schoolNameHyphenated = str_replace(' ', '-', $userDetails->school_assigned_string); // Replace spaces with hyphens
-        $paymentBatchId = $schoolNameHyphenated . '-' . $paymentPeriod . '-' . $randomNumber;
-
-        //Get beneficiaries from batch (filtered by school and payment status)
-        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
-            ->where('school_id', $schoolId)
-            ->where('payment_status_id', 1)
-            ->select(DB::raw("
-                COALESCE(transaction_id, 'N/A') AS TransactionID,
-                COALESCE(beneficiary_no, 'N/A') AS BeneficiaryNumber,
-                COALESCE(decrypt(first_name), 'N/A') AS FirstName,
-                COALESCE(decrypt(last_name), 'N/A') AS LastName,
-                COALESCE(school_name, 'N/A') AS School,
-                COALESCE(school_district, 'N/A') AS SchoolDistrict,
-                COALESCE(school_province, 'N/A') AS Province,
-                COALESCE(cwac_name, 'N/A') AS SchoolCwac,
-                COALESCE(mobile_phone_parent_guardian, 'N/A') AS GuardianPhoneNumber,
-                COALESCE(hhh_nrc_number, 'N/A') AS GuardianNRC,
-                COALESCE(decrypt(hhh_fname), 'N/A') AS GuardianFirstName,
-                COALESCE(decrypt(hhh_lname), 'N/A') AS GuardianLastName,
-                COALESCE(grant_amount, 0) AS EducationGrantAmount,
-                COALESCE(transaction_time_initiated, 'N/A') AS TransactionInitiatedAt
-            "))
-            ->get();
-
-            
-
-
-        // Log user activity
-        DB::table('sa_user_activity_logs')->insert([
-            'user_uuid'    => $userUuid,
-            'activity_type'=> 'download beneficiary list',
-            'ip_address'   => $request->ip(),
-            'user_agent'   => $request->header('User-Agent'),
-            'created_at'   => now(),
-        ]);
-
-        //Log the download attempt
-        DB::table('sa_app_payment_list_downloads_log')->insert([
-            'downloaded_by' => $userUuid,
-            'start_timestamp' => now(),
-            'end_timestamp' => now(),
-            'download_successful' => !$beneficiaries->isEmpty(),
-            'school_downloaded' => $userDetails->school_assigned_id,
-            'payment_batch_id' => $paymentBatchId
-        ]);
-
-        //Create the payment batch record
-        DB::table('sa_app_payment_batches')->insert([
-            'PaymentBatchID' => $paymentBatchId,
-            'SchoolID' => $schoolId,
-            'UserUUID' => $userUuid,
-            'DateGenerated' => now(),
-            'Status' => 'Pending',
-            'NumberOfStudents' => $beneficiaries->count(),
-            'AmountDisbursed' => 0,
-            'AmountReturned' => 0
-        ]);
-
-        if ($beneficiaries->isEmpty()) {
-            return response()->json(['message' => 'No beneficiaries found for the provided school.'], 404);
-        }
-
-        //NEW: Pull Head Teacher (designation_id=1) & Guidance Teacher (designation_id=2)
-        // Use school_assigned_id from sch_acc_app_user_details to query school_contactpersons.school_id
-        $schoolAssignedId = $userDetails->school_assigned_id ?? null;
-
-        $headTeacher = null;
-        $guidanceTeacher = null;
-
-        if (!empty($schoolAssignedId)) {
-            // Get both in one query, then map by designation_id
-            $contacts = DB::table('school_contactpersons')
-                ->where('school_id', $schoolAssignedId)
-                ->whereIn('designation_id', [1, 2])
-                ->select('designation_id', 'full_names')
-                ->get()
-                ->keyBy('designation_id');
-
-            $headTeacher = optional($contacts->get(1))->full_names ?? 'N/A';
-            $guidanceTeacher = optional($contacts->get(2))->full_names ?? 'N/A';
-
-        }
-
-        $totalBeneficiaries = $beneficiaries->count();
-        //Return JSON response (now includes head_teacher & guidance_teacher)
-        return response()->json([
-            'payment_batch_id' => $paymentBatchId ?? 'N/A',
-            'school' => $userDetails->school_assigned_string ?? 'N/A',
-            'head_teacher' => $headTeacher ?? 'N/A',
-            'guidance_teacher' => $guidanceTeacher ?? 'N/A',
-            'total_beneficiaries' => $totalBeneficiaries,
-            'payment_list' => $beneficiaries
-        ]);
-
-    }
-
     public function getBeneficiariesBySchool(Request $request)
     {
 
@@ -717,10 +577,24 @@ class MobileController extends Controller
         $schoolId = $schoolInfo->id;
 
         // Generate Payment Batch ID
-        $paymentPeriod = now()->format('Y-m');
-        $randomNumber = strtoupper(bin2hex(random_bytes(6)));
-        $schoolNameHyphenated = str_replace(' ', '-', $userDetails->school_assigned_string);
-        $paymentBatchId = $schoolNameHyphenated . '-' . $paymentPeriod . '-' . $randomNumber;
+        // $paymentPeriod = now()->format('Y-m');
+        // $randomNumber = strtoupper(bin2hex(random_bytes(6)));
+        // $schoolNameHyphenated = str_replace(' ', '-', $userDetails->school_assigned_string);
+        // $paymentBatchId = $schoolNameHyphenated . '-' . $paymentPeriod . '-' . $randomNumber;
+
+        // Fetch existing payment batch id from table
+        $existingBatch = DB::table('sa_app_beneficiary_list_4')
+            ->where('school_id', $schoolId)
+            ->whereNotNull('sch_pay_bat_id')
+            ->value('sch_pay_bat_id');
+
+        if (!$existingBatch) {
+            return response()->json([
+                'message' => 'No payment batch found for this school'
+            ], 404);
+        }
+
+        $paymentBatchId = $existingBatch;
 
         // Fetch Beneficiaries
         $beneficiaries = DB::table('sa_app_beneficiary_list_4')
