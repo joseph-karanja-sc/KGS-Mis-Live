@@ -475,7 +475,7 @@ class MobileController extends Controller
         // get ppm setup details (new source of truth)
         $ppmUser = \DB::table('ppmuserssetup_details as t1')
             ->where('t1.user_id', $userId)
-            ->select('t1.user_id', 't1.has_ppm_app_access', 't1.account_type')
+            ->select('t1.id', 't1.has_ppm_app_access', 't1.account_type')
             ->first();
 
         if (!$ppmUser || $ppmUser->has_ppm_app_access == 0) {
@@ -529,16 +529,9 @@ class MobileController extends Controller
         ]);
 
         // 9) Load assignments from new ppm tables
-
-        // get schools assigned
-        // $schools = \DB::table('ppmuserssetup_allocated_schools as t2')
-        //     ->where('t2.ppm_user_detail_id', $userId)
-        //     ->pluck('t2.school_name')
-        //     ->toArray();
-
         // get schools assigned
         $schoolsData = \DB::table('ppmuserssetup_allocated_schools as t2')
-            ->where('t2.ppm_user_detail_id', $userId)
+            ->where('t2.ppm_user_detail_id', $ppmUser->id)
             ->select('t2.school_name', 't2.cwac_name')
             ->get();
 
@@ -548,7 +541,7 @@ class MobileController extends Controller
 
         // get districts assigned
         $districts = \DB::table('ppmuserssetup_allocated_districts as t3')
-            ->where('t3.ppm_user_detail_id', $userId)
+            ->where('t3.ppm_user_detail_id', $ppmUser->id)
             ->pluck('t3.district_name')
             ->toArray();
 
