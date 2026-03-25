@@ -729,10 +729,13 @@ class MobileController extends Controller
             ['filename' => $fileName]
         );
 
+        $schoolClean = preg_replace('/^\d+\s*-\s*/', '', $userDetails->school_assigned_string);
+
         // Final JSON
         return response()->json([
             'payment_batch_id' => $paymentBatchId,
-            'school' => $userDetails->school_assigned_string,
+            'school' => $schoolClean,
+            // 'school' => $userDetails->school_assigned_string,
             'head_teacher' => $headTeacher,
             'guidance_teacher' => $guidanceTeacher,
             'total_beneficiaries' => $beneficiaries->count(),
