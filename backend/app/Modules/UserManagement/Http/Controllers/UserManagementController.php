@@ -1818,11 +1818,14 @@ class UserManagementController extends BaseController
                 ->leftJoin('titles', 'titles.id', '=', 'users.title_id')
                 ->leftJoin('access_points', 'access_points.id', '=', 'users.access_point_id')
                 ->leftJoin('user_images', 'users.id', '=', 'user_images.user_id')
+                ->leftJoin('ppmuserssetup_allocated_districts', 'ppmuserssetup_allocated_districts.ppm_user_detail_id', '=', 'pum.id')
+                ->leftJoin('districts', 'districts.id', '=', 'ppmuserssetup_allocated_districts.district_id')
                 ->select(
                     'pum.*',
                     'users.id as user_id',
                     'titles.name as title',
                     'access_points.name as access_point_name',
+                    'districts.name as district_name',
                     DB::raw('CONCAT("/resources/images/user-profile/", user_images.saved_name) as profile_photo'),
                     DB::raw('CONCAT(decrypt(first_name)," ",decrypt(last_name)) as fullnames'),
                     DB::raw('decrypt(users.email) as email')
@@ -2229,11 +2232,10 @@ class UserManagementController extends BaseController
 
                     // update sa_app_user_details 
                     DB::table('sa_app_user_details')
-                    ->where('users_id', $req->input('original_user_id'))
+                    ->where('user_id', $req->input('original_user_id'))
                     ->update([
                         'zonal_accountant' => ($detail->account_type === 'zonal_accountant' ? 1 : 0),
-                        'updated_at' => now(),
-                        'updated_by' => $user_id
+                        'updated_at' => now()
                     ]);
                 }
             } 
