@@ -5020,13 +5020,16 @@ class MobileController extends Controller
         try {
             set_time_limit(0);
 
+            $year = date('Y');
+            $month = date('m');
+
             $startTime = microtime(true);
 
-            // get all schools that do not yet have a batch
+            // get schools with null batch
             $schools = DB::table('sa_app_beneficiary_list_4')
-                ->select('school_id')
+                ->select('school_id', 'school_name', 'school_district')
                 ->whereNull('sch_pay_bat_id')
-                ->groupBy('school_id')
+                ->groupBy('school_id', 'school_name', 'school_district')
                 ->get();
 
             if ($schools->isEmpty()) {
@@ -5040,10 +5043,28 @@ class MobileController extends Controller
 
             foreach ($schools as $school) {
 
-                // generate unique batch id per school
-                $batchId = 'BATCH_' . $school->school_id . '_' . time() . '_' . uniqid();
+                // clean school name (remove "362 - ")
+                $schoolName = trim(preg_replace('/^\d+\s*-\s*/', '', $school->school_name));
 
-                // assign batch id to all records for that school where null
+                // clean district name (remove "18 - ")
+                $districtName = trim(preg_replace('/^\d+\s*-\s*/', '', $school->school_district));
+
+                // normalize names → replace spaces with hyphens, uppercase
+                $schoolName = strtoupper(str_replace(' ', '-', $schoolName));
+                $districtName = strtoupper(str_replace(' ', '-', $districtName));
+
+                // generate 12-char unique string
+                $unique = strtoupper(substr(bin2hex(random_bytes(6)), 0, 12));
+
+                // final batch id
+                $batchId = $school->school_id
+                    . '---' . $schoolName
+                    . '---' . $districtName
+                    . '-' . $year
+                    . '-' . $month
+                    . '-' . $unique;
+
+                // update all rows for that school
                 $affected = DB::table('sa_app_beneficiary_list_4')
                     ->where('school_id', $school->school_id)
                     ->whereNull('sch_pay_bat_id')
