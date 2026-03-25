@@ -540,10 +540,9 @@ class MobileController extends Controller
         $cwacs   = $schoolsData->pluck('cwac_name')->toArray();
 
         // get districts assigned
-        $districts = \DB::table('ppmuserssetup_allocated_districts as t3')
+        $district = \DB::table('ppmuserssetup_allocated_districts as t3')
             ->where('t3.ppm_user_detail_id', $ppmUser->id)
-            ->pluck('t3.district_name')
-            ->toArray();
+            ->value('t3.district_name');
 
         // determine zonal flag from account_type
         $isZonal = ($ppmUser->account_type === 'zonal_accountant') ? 1 : 0;
@@ -557,7 +556,7 @@ class MobileController extends Controller
                 'user' => [
                     'uuid'              => $kgsMisUser->uuid,
                     'email'             => $kgsMisUser->email,
-                    'district_assigned' => $districts,
+                    'district_assigned' => $district,
                     'school_assigned' => $schools,
                     'school_cwac'     => $cwacs,
                     'zonal_accountant'  => $isZonal,
