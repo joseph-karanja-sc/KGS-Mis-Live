@@ -2162,10 +2162,10 @@ class UserManagementController extends BaseController
             }
 
             // Validate district accountant constraint (max 1 district)
-            if ($detail->account_type === 'school_accountant' && count($district_ids) > 1) {
+            if (count($district_ids) > 1) {
                 $res = array(
                     'success' => false,
-                    'message' => 'School accountants can only be assigned to one district.'
+                    'message' => 'All accountants can only be assigned to one district.'
                 );
                 return response()->json($res);
             }
@@ -2231,7 +2231,7 @@ class UserManagementController extends BaseController
                     DB::table('sa_app_user_details')
                     ->where('users_id', $req->input('original_user_id'))
                     ->update([
-                        'zonal_accountant' => ($account_type === 'zonal_accountant' ? 1 : 0),
+                        'zonal_accountant' => ($detail->account_type === 'zonal_accountant' ? 1 : 0),
                         'updated_at' => now(),
                         'updated_by' => $user_id
                     ]);
