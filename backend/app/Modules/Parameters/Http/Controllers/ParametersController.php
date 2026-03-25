@@ -4518,6 +4518,11 @@ class ParametersController extends BaseController
  
     public function getUsersForApp(Request $request)
     {
+        return response()->json([
+            'success' => true,
+            'message' => 'Data retrieved successfully',
+            'results' => []
+        ]);
         try {
             $latestSchool = DB::table('sa_app_user_details')
                 ->select(

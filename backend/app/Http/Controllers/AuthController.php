@@ -207,7 +207,7 @@ class AuthController extends Controller
                         'profile_url' => $profile_url,
                         'allocated_district_id' => $loggedInUser->allocated_district_id,
                         'has_kgs_app_access' => $loggedInUser->has_kgs_app_access,
-                        'is_app_admin' => $loggedInUser->is_app_admin
+                        'is_app_admin' => 0 // $loggedInUser->is_app_admin // set to default of 0 to disable app admin functions
                     );
                     $res = array(
                         'success' => true,
