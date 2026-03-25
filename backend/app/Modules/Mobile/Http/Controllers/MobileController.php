@@ -142,164 +142,8 @@ class MobileController extends Controller
 
     // functions for School accountant app are below (added by joseph oct 2025)
     //login
-    public function loginV1(Request $request)
-    {
-        $validatedData = $request->validate([
-            'Email'    => 'required|string',
-            'Password' => 'required|string',
-        ]);
 
-        try {
-            $client = new \GuzzleHttp\Client([
-                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
-                'timeout'  => 15,
-            ]);
-
-            $response = $client->post('api-login', [
-                'json' => [
-                    'email'       => $validatedData['Email'],
-                    'password'    => $validatedData['Password'],
-                    'remember_me' => 1,
-                ],
-                'headers' => [
-                    'Accept' => 'application/json',
-                ],
-            ]);
-
-            $httpStatus = $response->getStatusCode();
-            $payload    = json_decode((string) $response->getBody(), true) ?: [];
-
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            $httpStatus = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 0;
-            $body       = $e->hasResponse() ? (string) $e->getResponse()->getBody() : null;
-
-            return response()->json([
-                'Message' => 'Could not reach the server. Please try again later.',
-                'Code'    => $httpStatus,
-                'Details' => $body,
-            ], $httpStatus === 0 ? 502 : $httpStatus);
-        }
-
-        $code            = isset($payload['code']) ? (int) $payload['code'] : $httpStatus;
-        $externalMessage = $payload['message'] ?? null;
-
-        if ($code !== 200) {
-            switch ($code) {
-                case 404:
-                    $friendlyMessage = "We couldn't find an account with that email address.";
-                    break;
-                case 403:
-                    $friendlyMessage = "This account has been blocked. Please contact support.";
-                    break;
-                case 401:
-                    $friendlyMessage = "Incorrect password or too many failed login attempts. Try again later.";
-                    break;
-                default:
-                    $friendlyMessage = "Login failed. Please try again.";
-                    break;
-            }
-
-            return response()->json([
-                'Message' => $friendlyMessage,
-                'Code'    => $code,
-                'Details' => $externalMessage,
-            ], ($code >= 100 && $code < 600) ? $code : 400);
-        }
-
-        $apiUser = $payload['user'] ?? null;
-        $userId  = is_array($apiUser) ? ($apiUser['user_id'] ?? $apiUser['id'] ?? null) : null;
-
-        if (!$userId) {
-            return response()->json([
-                'Message' => 'Login successful but user_id missing in API response.',
-                'Code'    => 422,
-            ], 422);
-        }
-
-        // Ensure the user has access to the School Accountant App
-        if (isset($apiUser['has_ppm_app_access']) && $apiUser['has_ppm_app_access'] == 0) {
-            return response()->json([
-                'Message' => 'You do not have access to the school accountant app.',
-                'Code'    => 403,
-            ], 403);
-        }
-
-        $kgsMisUser = \DB::table('users')
-            ->where('id', $userId)
-            ->select(\DB::raw('uuid, decrypt(email) AS email'))
-            ->first();
-
-        if (!$kgsMisUser) {
-            return response()->json([
-                'Message' => 'User login was successful but KGS MIS User record not found.',
-                'Code'    => 404,
-            ], 404);
-        }
-
-        $userUuid = $kgsMisUser->uuid;
-
-        $tokenString = \Illuminate\Support\Str::random(80);
-
-        \DB::table('sa_app_token_management')->insert([
-            'user_uuid'  => $userUuid,
-            'token'      => $tokenString,
-            'expires_at' => now()->addHours(24),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $existing = \DB::table('sa_app_user_management')
-            ->where('user_id', $userId)
-            ->first();
-
-        if (!$existing) {
-            \DB::table('sa_app_user_management')->insert([
-                'user_id'           => $userId,
-                'district_assigned' => '',
-                'school_assigned'   => '',
-                'school_cwac'       => '',
-                'access_token'      => $tokenString,
-                'API_key'           => \Illuminate\Support\Str::random(40),
-                'created_at'        => now(),
-                'updated_at'        => now(),
-            ]);
-        } else {
-            \DB::table('sa_app_user_management')
-                ->where('user_id', $userId)
-                ->update([
-                    'access_token' => $tokenString,
-                    'updated_at'   => now(),
-                ]);
-        }
-
-        \DB::table('sa_user_activity_logs')->insert([
-            'user_uuid'    => $userUuid,
-            'activity_type'=> 'login',
-            'ip_address'   => $request->ip(),
-            'user_agent'   => $request->header('User-Agent'),
-            'created_at'   => now(),
-        ]);
-
-        $ppmAppUser = \DB::table('sa_app_user_details')
-            ->where('user_id', $userId)
-            ->select('district_assigned_string', 'school_assigned_string', 'school_cwac_string')
-            ->first();
-
-        return response()->json([
-            'access_token' => $tokenString,
-            'token_type'   => 'Bearer',
-            'expires_at'   => now()->addHours(24)->toDateTimeString(),
-            'user' => [
-                'uuid'              => $kgsMisUser->uuid,
-                'email'             => $kgsMisUser->email,
-                'district_assigned' => $ppmAppUser->district_assigned_string ?? null,
-                'school_assigned'   => $ppmAppUser->school_assigned_string ?? null,
-                'school_cwac'       => $ppmAppUser->school_cwac_string ?? null,
-            ],
-        ], 200);
-    }
-
-    public function login(Request $request)
+    public function loginv1(Request $request)
     {
         /*
         |--------------------------------------------------------------------------
@@ -340,7 +184,6 @@ class MobileController extends Controller
         */
         try {
             $client = new \GuzzleHttp\Client([
-                // 'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
                 'base_uri' => config('app.pg_base_url') . '/api/',
                 'timeout'  => 15,
             ]);
@@ -518,6 +361,213 @@ class MobileController extends Controller
                     'school_assigned'   => $ppmAppUser->school_assigned_string ?? null,
                     'school_cwac'       => $ppmAppUser->school_cwac_string ?? null,
                     'zonal_accountant'  => $ppmAppUser->zonal_accountant ?? null,
+                ],
+            ], 200)
+            ->header('Content-Type', 'application/json')
+            ->header('X-Content-Type-Options', 'nosniff');
+    }
+
+    //added by jose 25-mar-2026
+    public function login(Request $request)
+    {
+        // 1) Enforce json-only api contract
+        if (!$request->expectsJson()) {
+            return response()->json([
+                'Message' => 'Unsupported media type. JSON requests only.',
+                'Code'    => 415,
+            ], 415);
+        }
+
+        // 2) Manual validation (no $request->validate())
+        $validator = \Validator::make($request->all(), [
+            'Email'    => 'required|string',
+            'Password' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'Message' => 'Validation failed.',
+                'Errors'  => $validator->errors(),
+                'Code'    => 422,
+            ], 422);
+        }
+
+        $validatedData = $validator->validated();
+
+        // 3) Call upstream mis login api
+        try {
+            $client = new \GuzzleHttp\Client([
+                'base_uri' => config('app.pg_base_url') . '/api/',
+                'timeout'  => 15,
+            ]);
+
+            $response = $client->post('api-login', [
+                'json' => [
+                    'email'       => $validatedData['Email'],
+                    'password'    => $validatedData['Password'],
+                    'remember_me' => 1,
+                ],
+                'headers' => [
+                    'Accept'       => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+            ]);
+
+            $httpStatus = $response->getStatusCode();
+            $payload    = json_decode((string) $response->getBody(), true) ?: [];
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+
+            $httpStatus = $e->hasResponse()
+                ? $e->getResponse()->getStatusCode()
+                : 502;
+
+            // log upstream response internally (never expose to client)
+            \Log::error('MIS Login Error', [
+                'status' => $httpStatus,
+                'body'   => $e->hasResponse() ? (string) $e->getResponse()->getBody() : null,
+            ]);
+
+            return response()->json([
+                'Message' => 'Authentication service unavailable. Please try again later.',
+                'Code'    => $httpStatus,
+            ], $httpStatus);
+        }
+
+        // 4) Handle upstream error codes cleanly
+        $code            = (int) ($payload['code'] ?? $httpStatus);
+        $externalMessage = $payload['message'] ?? null;
+
+        if ($code !== 200) {
+            switch ($code) {
+                case 404:
+                    $friendlyMessage = "We couldn't find an account with that email address.";
+                    break;
+                case 403:
+                    $friendlyMessage = "This account has been blocked. Please contact support.";
+                    break;
+                case 401:
+                    $friendlyMessage = "Incorrect credentials or too many failed attempts.";
+                    break;
+                default:
+                    $friendlyMessage = "Login failed. Please try again.";
+            }
+
+            return response()->json([
+                'Message' => $friendlyMessage,
+                'Code'    => $code,
+            ], ($code >= 100 && $code < 600) ? $code : 400);
+        }
+
+        // 5) Extract user + access checks
+        $apiUser = $payload['user'] ?? null;
+        $userId  = is_array($apiUser)
+            ? ($apiUser['user_id'] ?? $apiUser['id'] ?? null)
+            : null;
+
+        if (!$userId) {
+            return response()->json([
+                'Message' => 'Login successful but user identifier missing.',
+                'Code'    => 422,
+            ], 422);
+        }
+
+        // get ppm setup details (new source of truth)
+        $ppmUser = \DB::table('ppmuserssetup_details as t1')
+            ->where('t1.user_id', $userId)
+            ->select('t1.user_id', 't1.has_ppm_app_access', 't1.account_type')
+            ->first();
+
+        if (!$ppmUser || $ppmUser->has_ppm_app_access == 0) {
+            return response()->json([
+                'Message' => 'You do not have access to the School Accountant App.',
+                'Code'    => 403,
+            ], 403);
+        }
+
+        // 6) Fetch local mis user
+        $kgsMisUser = \DB::table('users')
+            ->where('id', $userId)
+            ->select(\DB::raw('uuid, decrypt(email) AS email'))
+            ->first();
+
+        if (!$kgsMisUser) {
+            return response()->json([
+                'Message' => 'User authenticated but not found in MIS.',
+                'Code'    => 404,
+            ], 404);
+        }
+
+        // 7) Token generation + persistence
+        $tokenString = \Illuminate\Support\Str::random(80);
+
+        \DB::table('sa_app_token_management')->insert([
+            'user_uuid'  => $kgsMisUser->uuid,
+            'token'      => $tokenString,
+            'expires_at' => now()->addHours(24),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        \DB::table('sa_app_user_management')->updateOrInsert(
+            ['user_id' => $userId],
+            [
+                'access_token' => $tokenString,
+                'API_key'      => \Illuminate\Support\Str::random(40),
+                'updated_at'   => now(),
+                'created_at'   => now(),
+            ]
+        );
+
+        // 8) Activity logging
+        \DB::table('sa_user_activity_logs')->insert([
+            'user_uuid'     => $kgsMisUser->uuid,
+            'activity_type' => 'login',
+            'ip_address'    => $request->ip(),
+            'user_agent'    => $request->header('User-Agent'),
+            'created_at'    => now(),
+        ]);
+
+        // 9) Load assignments from new ppm tables
+
+        // get schools assigned
+        // $schools = \DB::table('ppmuserssetup_allocated_schools as t2')
+        //     ->where('t2.ppm_user_detail_id', $userId)
+        //     ->pluck('t2.school_name')
+        //     ->toArray();
+
+        // get schools assigned
+        $schoolsData = \DB::table('ppmuserssetup_allocated_schools as t2')
+            ->where('t2.ppm_user_detail_id', $userId)
+            ->select('t2.school_name', 't2.cwac_name')
+            ->get();
+
+        // split into separate arrays
+        $schools = $schoolsData->pluck('school_name')->toArray();
+        $cwacs   = $schoolsData->pluck('cwac_name')->toArray();
+
+        // get districts assigned
+        $districts = \DB::table('ppmuserssetup_allocated_districts as t3')
+            ->where('t3.ppm_user_detail_id', $userId)
+            ->pluck('t3.district_name')
+            ->toArray();
+
+        // determine zonal flag from account_type
+        $isZonal = ($ppmUser->account_type === 'zonal_accountant') ? 1 : 0;
+
+        // 10) Final json response
+        return response()
+            ->json([
+                'access_token' => $tokenString,
+                'token_type'   => 'Bearer',
+                'expires_at'   => now()->addHours(24)->toDateTimeString(),
+                'user' => [
+                    'uuid'              => $kgsMisUser->uuid,
+                    'email'             => $kgsMisUser->email,
+                    'district_assigned' => $districts,
+                    'school_assigned' => $schools,
+                    'school_cwac'     => $cwacs,
+                    'zonal_accountant'  => $isZonal,
                 ],
             ], 200)
             ->header('Content-Type', 'application/json')
