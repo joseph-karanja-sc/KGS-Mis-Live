@@ -12761,7 +12761,7 @@ public function uploadPaymentGrantList(Request $request)
                         if ($img_update) {
                             $img_update['images_converted'] = 1;
                             // $img_update['disclaimer_form'] = '';
-                            DB::table('beneficiary_payresponses_staging')
+                            DB::table('beneficiary_payresponses_staging_clone')
                                 ->insert(
                                     array(
 
@@ -12789,7 +12789,7 @@ public function uploadPaymentGrantList(Request $request)
                         if ($img_update) {
                             $img_update['images_converted'] = 1;
                             // $img_update['disclaimer_form'] = '';
-                            DB::table('beneficiary_payresponses_staging')
+                            DB::table('beneficiary_payresponses_staging_clone')
                                 ->insert(
                                     array(
 
@@ -12817,7 +12817,7 @@ public function uploadPaymentGrantList(Request $request)
                         if ($img_update) {
                             $img_update['images_converted'] = 1;
                             // $img_update['disclaimer_form'] = '';
-                            DB::table('beneficiary_payresponses_staging')
+                            DB::table('beneficiary_payresponses_staging_clone')
                                 ->insert(
                                     array(
 
@@ -12843,7 +12843,7 @@ public function uploadPaymentGrantList(Request $request)
             $payment_ref_no = $req->input('payment_ref_no');
             $payment_status = 'PAID';
             $fin_qry = DB::table('beneficiary_uploadfiles_staging as t1')
-                ->leftJoin('beneficiary_payresponses_staging as t2', 't2.image_type', '=', 't1.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t2', 't2.image_type', '=', 't1.id')
 
                 ->leftJoin('beneficiary_information as t3', 't2.beneficiary_id', '=', 't3.id')
                 ->leftJoin('beneficiary_images_ppm as t4', 't4.beneficiary_number', '=', 't3.beneficiary_id')
@@ -13085,7 +13085,7 @@ public function uploadPaymentGrantList(Request $request)
                                 ->orWhereNull('t1.under_promotion');
                         })->get();
                 } else {            
-                    $ben_data = DB::table('beneficiary_payresponses_staging as t0')
+                    $ben_data = DB::table('beneficiary_payresponses_staging_clone as t0')
                         ->join('beneficiary_information as t1', 't0.id', '=', 't1.id')
                         ->selectRaw('t0.id,t0.confirmed_grade as current_school_grade,
                                 t0.beneficiary_schoolstatus_id as beneficiary_school_status')
@@ -13363,10 +13363,10 @@ public function uploadPaymentGrantList(Request $request)
                 t5.school_transfered_to,decrypt(t1.first_name) as first_name,decrypt(t1.last_name) as last_name"))
                 ->leftJoin('school_information as t3', 't1.school_id', '=', 't3.id')
                 ->leftJoin('districts as t4', 't1.district_id', '=', 't4.id')
-                ->leftJoin('beneficiary_payresponses_staging as t5', 't1.id', '=', 't5.id')
+                ->leftJoin('beneficiary_payresponses_staging_clone as t5', 't1.id', '=', 't5.id')
                 ->leftJoin('suspension_reasons as t6', 't5.unavailable_reason_id', '=', 't6.id');
             if(validateisNumeric($school_id)) {
-                $id_qry = DB::table('beneficiary_payresponses_staging as t1')
+                $id_qry = DB::table('beneficiary_payresponses_staging_clone as t1')
                     ->select('t1.id')
                     ->whereRaw("t1.school_id = ".$school_id." AND t1.verification_status <> 'pending'")                    
                     ->get();
