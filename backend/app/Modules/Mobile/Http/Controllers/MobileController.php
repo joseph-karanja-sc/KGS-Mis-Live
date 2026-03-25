@@ -5015,4 +5015,64 @@ class MobileController extends Controller
         ]);
     }
 
+    public function generateSchoolPaymentBatches()
+    {
+        try {
+            set_time_limit(0);
+
+            $startTime = microtime(true);
+
+            // get all schools that do not yet have a batch
+            $schools = DB::table('sa_app_beneficiary_list_4')
+                ->select('school_id')
+                ->whereNull('sch_pay_bat_id')
+                ->groupBy('school_id')
+                ->get();
+
+            if ($schools->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No schools found with null batch id'
+                ]);
+            }
+
+            $updatedSchools = 0;
+
+            foreach ($schools as $school) {
+
+                // generate unique batch id per school
+                $batchId = 'BATCH_' . $school->school_id . '_' . time() . '_' . uniqid();
+
+                // assign batch id to all records for that school where null
+                $affected = DB::table('sa_app_beneficiary_list_4')
+                    ->where('school_id', $school->school_id)
+                    ->whereNull('sch_pay_bat_id')
+                    ->update([
+                        'sch_pay_bat_id' => $batchId
+                    ]);
+
+                if ($affected > 0) {
+                    $updatedSchools++;
+                }
+            }
+
+            $endTime = microtime(true);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Batch IDs generated successfully',
+                'schools_updated' => $updatedSchools,
+                'time_seconds' => round($endTime - $startTime, 2)
+            ]);
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error generating batch IDs',
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
 }
