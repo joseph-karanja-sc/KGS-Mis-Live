@@ -2163,10 +2163,10 @@ class UserManagementController extends BaseController
             }
 
             // Validate district accountant constraint (max 1 district)
-            if ($detail->account_type === 'school_accountant' && count($district_ids) > 1) {
+            if (count($district_ids) > 1) {
                 $res = array(
                     'success' => false,
-                    'message' => 'School accountants can only be assigned to one district.'
+                    'message' => 'All accountants can only be assigned to one district.'
                 );
                 return response()->json($res);
             }
