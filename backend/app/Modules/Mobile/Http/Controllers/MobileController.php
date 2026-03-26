@@ -590,21 +590,41 @@ class MobileController extends Controller
         }
 
         // Validate School Access
-        $userDetails = DB::table('sa_app_user_details')
-            ->where('uuid', $userUuid)
+        // $userDetails = DB::table('sa_app_user_details')
+        //     ->where('uuid', $userUuid)
+        //     ->first();
+
+        // if (!$userDetails || empty($userDetails->school_assigned_id)) {
+        //     return response()->json(['message' => 'User has no assigned school.'], 403);
+        // }
+
+        // $schoolCode = $request->query('school');
+        // if (empty($schoolCode)) {
+        //     return response()->json(['message' => 'Please provide a school code'], 400);
+        // }
+
+        // $assignedSchoolCode = explode(' ', $userDetails->school_assigned_id)[0];
+        // if ($assignedSchoolCode !== $schoolCode) {
+        //     return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
+        // }
+
+        // Validate school access using ppm tables
+        $ppmUser = DB::table('ppmuserssetup_details')
+            ->where('user_id', $user->id)
+            ->select('id')
             ->first();
 
-        if (!$userDetails || empty($userDetails->school_assigned_id)) {
-            return response()->json(['message' => 'User has no assigned school.'], 403);
+        if (!$ppmUser) {
+            return response()->json(['message' => 'User setup not found.'], 403);
         }
 
-        $schoolCode = $request->query('school');
-        if (empty($schoolCode)) {
-            return response()->json(['message' => 'Please provide a school code'], 400);
-        }
+        // Check if user is assigned to this school
+        $hasAccess = DB::table('ppmuserssetup_allocated_schools')
+            ->where('ppm_user_detail_id', $ppmUser->id)
+            ->where('school_id', $schoolCode)
+            ->exists();
 
-        $assignedSchoolCode = explode(' ', $userDetails->school_assigned_id)[0];
-        if ($assignedSchoolCode !== $schoolCode) {
+        if (!$hasAccess) {
             return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
         }
 
@@ -617,6 +637,11 @@ class MobileController extends Controller
         }
 
         $schoolId = $schoolInfo->id;
+
+        $schoolAssignedString = DB::table('ppmuserssetup_allocated_schools')
+        ->where('ppm_user_detail_id', $ppmUser->id)
+        ->where('school_id', $schoolCode)
+        ->value('school_name');
 
         // Generate Payment Batch ID
         // $paymentPeriod = now()->format('Y-m');
@@ -728,7 +753,7 @@ class MobileController extends Controller
         $pdf->AddPage();
 
         $html = '<h3>Payment Batch ID: '.$paymentBatchId.'</h3>
-        <p><strong>School:</strong> '.$userDetails->school_assigned_string.'</p>
+        <p><strong>School:</strong> '.$schoolAssignedString.'</p>
         <table border="1" cellpadding="3">
             <tr>
                 <th width="15">#</th>
@@ -771,7 +796,7 @@ class MobileController extends Controller
             ['filename' => $fileName]
         );
 
-        $schoolClean = preg_replace('/^\d+\s*-\s*/', '', $userDetails->school_assigned_string);
+        $schoolClean = preg_replace('/^\d+\s*-\s*/', '', $schoolAssignedString);
 
         // Final JSON
         return response()->json([
