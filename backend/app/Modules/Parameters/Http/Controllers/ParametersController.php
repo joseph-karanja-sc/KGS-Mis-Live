@@ -2804,7 +2804,7 @@ class ParametersController extends BaseController
             }
 
             //Return the full public URL that will be stored in the database
-            return "https://kgsmis.edu.gov.zm/backend/public/img/{$folder}/{$fileName}";
+            return "/moe_cms_test_variant/backend/public/img/{$folder}/{$fileName}";
 
         } catch (\Exception $e) {
 
