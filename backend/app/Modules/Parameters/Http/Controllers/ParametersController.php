@@ -5619,6 +5619,7 @@ class ParametersController extends BaseController
                     COALESCE(YEAR(t9.created_at),2024) as selected_year,0 as added_span,0 as submission_span,
                     t2.name as school_name,t2.code as emis_code,t9.witness_name,t10.batch_no,t9.head_mobile as headteacher_tel_no,
                     t3.name as district_name,t6.name as province_name,t9.in_workflow,t9.full_names as school_headteacher,
+                    t9.are_bank_details_correct, t9.bank_details_comment,
                     (
                         SELECT COUNT(t11.id) FROM beneficiary_payresponses_staging_clone t11 
                         WHERE " . ($is_verified == 1 ? ("t11.verification_status = 'pending'") : 
