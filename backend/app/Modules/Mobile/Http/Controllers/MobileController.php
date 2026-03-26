@@ -589,24 +589,12 @@ class MobileController extends Controller
             return response()->json(['message' => 'This user does not exist'], 404);
         }
 
-        // Validate School Access
-        // $userDetails = DB::table('sa_app_user_details')
-        //     ->where('uuid', $userUuid)
-        //     ->first();
+        // Get school code from request
+        $schoolCode = $request->query('school');
 
-        // if (!$userDetails || empty($userDetails->school_assigned_id)) {
-        //     return response()->json(['message' => 'User has no assigned school.'], 403);
-        // }
-
-        // $schoolCode = $request->query('school');
-        // if (empty($schoolCode)) {
-        //     return response()->json(['message' => 'Please provide a school code'], 400);
-        // }
-
-        // $assignedSchoolCode = explode(' ', $userDetails->school_assigned_id)[0];
-        // if ($assignedSchoolCode !== $schoolCode) {
-        //     return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
-        // }
+        if (empty($schoolCode)) {
+            return response()->json(['message' => 'Please provide a school code'], 400);
+        }
 
         // Validate school access using ppm tables
         $ppmUser = DB::table('ppmuserssetup_details')
@@ -642,12 +630,6 @@ class MobileController extends Controller
         ->where('ppm_user_detail_id', $ppmUser->id)
         ->where('school_id', $schoolCode)
         ->value('school_name');
-
-        // Generate Payment Batch ID
-        // $paymentPeriod = now()->format('Y-m');
-        // $randomNumber = strtoupper(bin2hex(random_bytes(6)));
-        // $schoolNameHyphenated = str_replace(' ', '-', $userDetails->school_assigned_string);
-        // $paymentBatchId = $schoolNameHyphenated . '-' . $paymentPeriod . '-' . $randomNumber;
 
         // Fetch existing payment batch id from table
         $existingBatch = DB::table('sa_app_beneficiary_list_4')
@@ -706,17 +688,6 @@ class MobileController extends Controller
             'school_downloaded' => $userDetails->school_assigned_id,
             'payment_batch_id' => $paymentBatchId
         ]);
-
-        // DB::table('sa_app_payment_batches')->insert([
-        //     'PaymentBatchID' => $paymentBatchId,
-        //     'SchoolID' => $schoolId,
-        //     'UserUUID' => $userUuid,
-        //     'DateGenerated' => now(),
-        //     'Status' => 'Pending',
-        //     'NumberOfStudents' => $beneficiaries->count(),
-        //     'AmountDisbursed' => 0,
-        //     'AmountReturned' => 0
-        // ]);
 
         DB::table('sa_app_payment_batches')->updateOrInsert(
             ['PaymentBatchID' => $paymentBatchId], // check existing
@@ -802,7 +773,6 @@ class MobileController extends Controller
         return response()->json([
             'payment_batch_id' => $paymentBatchId,
             'school' => $schoolClean,
-            // 'school' => $userDetails->school_assigned_string,
             'head_teacher' => $headTeacher,
             'guidance_teacher' => $guidanceTeacher,
             'total_beneficiaries' => $beneficiaries->count(),
