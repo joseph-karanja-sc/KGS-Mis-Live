@@ -1263,6 +1263,7 @@ class MobileController extends Controller
             // === 3) Validate Request Body ===
             $data = $request->validate([
                 'deposit_slip_image' => 'required|string',
+                'expected_amount'   => 'required|numeric',
                 'amount_deposited'   => 'required|numeric',
                 'comments'           => 'nullable|string'
             ]);
@@ -1274,6 +1275,7 @@ class MobileController extends Controller
                 'PaymentBatchID'   => $paymentBatchId,
                 'UserUUID'         => $userUuid,
                 'DepositSlipImage' => $data['deposit_slip_image'],
+                'ExpectedAmount'  => $data['expected_amount'],
                 'AmountDeposited'  => $data['amount_deposited'],
                 'Comments'         => $data['comments'] ?? null,
                 'DateSubmitted'    => now(),
