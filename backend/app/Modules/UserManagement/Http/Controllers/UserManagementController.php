@@ -1919,8 +1919,9 @@ class UserManagementController extends BaseController
         try {
             $selected_user_id = $req->input('user_id');
             $account_type = $req->input('account_type');
-            $has_kgs_app_access = $req->boolean('has_kgs_app_access');
-            $has_ppm_app_access = $req->boolean('has_ppm_app_access');
+            $has_kgs_app_access = $req->input('has_kgs_app_access') == '1' || $req->input('has_kgs_app_access') === true || $req->input('has_kgs_app_access') === 'true' ? 1 : 0;
+            $has_ppm_app_access = $req->input('has_ppm_app_access') == '1' || $req->input('has_ppm_app_access') === true || $req->input('has_ppm_app_access') === 'true' ? 1 : 0;
+
             
             // Check if user already exists in ppmuserssetup_details
             $existing = DB::table('ppmuserssetup_details')
