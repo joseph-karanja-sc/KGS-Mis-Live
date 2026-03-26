@@ -685,7 +685,7 @@ class MobileController extends Controller
             'start_timestamp' => now(),
             'end_timestamp' => now(),
             'download_successful' => !$beneficiaries->isEmpty(),
-            'school_downloaded' => $userDetails->school_assigned_id,
+            'school_downloaded' => $schoolAssignedString,
             'payment_batch_id' => $paymentBatchId
         ]);
 
@@ -704,7 +704,8 @@ class MobileController extends Controller
 
         // Head Teacher & Guidance Teacher
         $contacts = DB::table('school_contactpersons')
-            ->where('school_id', $userDetails->school_assigned_id)
+            // ->where('school_id', $userDetails->school_assigned_id)
+            ->where('school_id', $schoolId)
             ->whereIn('designation_id', [1, 2])
             ->select('designation_id', 'full_names')
             ->get()
