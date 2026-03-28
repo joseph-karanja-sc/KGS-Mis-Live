@@ -1830,8 +1830,7 @@ class UserManagementController extends BaseController
                     DB::raw('CONCAT(decrypt(first_name)," ",decrypt(last_name)) as fullnames'),
                     DB::raw('decrypt(users.email) as email')
                 )
-                ->orderBy('fullnames', 'asc')
-                ->limit(500);
+                ->orderBy('fullnames', 'asc');
             
             $data = $qry->get();
             $data = convertStdClassObjToArray($data);
