@@ -948,7 +948,7 @@ class MobileController extends Controller
                 ]);
                 return response()->json([
                     'Message' => 'Some records failed to process',
-                    'Errors' => $errors,
+                    // 'Errors' => $errors,
                     'SuccessCount' => $successCount
                 ], 422);
             }
@@ -965,7 +965,7 @@ class MobileController extends Controller
 
             return response()->json([
                 'Message' => 'Server error while processing request',
-                'Error' => $e->getMessage()
+                // 'Error' => $e->getMessage()
             ], 500);
         }
     }
@@ -1189,7 +1189,7 @@ class MobileController extends Controller
                 return response()->json([
                     'message'          => 'Some records could not be saved due to validation errors',
                     'inserted_records' => $insertedRecordsCount,
-                    'errors'           => $errors
+                    // 'errors'           => $errors
                 ], 422);
             }
 
@@ -1210,11 +1210,11 @@ class MobileController extends Controller
         } catch (\Exception $e) {
             Log::error('Beneficiary image upload failed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                // 'trace' => $e->getTraceAsString(),
             ]);
             return response()->json([
                 'error' => 'Server error while processing request',
-                'details' => $e->getMessage(),
+                // 'details' => $e->getMessage(),
             ], 500);
         }
     }
@@ -1299,7 +1299,7 @@ class MobileController extends Controller
             // Input validation error
             return response()->json([
                 'message' => 'Validation error',
-                'errors'  => $e->errors(),
+                // 'errors'  => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
             // Rollback in case of failure
@@ -1312,7 +1312,7 @@ class MobileController extends Controller
 
             return response()->json([
                 'message' => 'Server error while submitting deposit slip',
-                'error'   => $e->getMessage(),
+                // 'error'   => $e->getMessage(),
             ], 500);
         }
     }
