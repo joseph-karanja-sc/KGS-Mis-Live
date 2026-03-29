@@ -868,7 +868,7 @@ class MobileController extends Controller
                     DB::beginTransaction();
 
                     // Check if record already exists
-                    $existing = DB::table('beneficiary_transaction_status')
+                    $existing = DB::table('beneficiary_transaction_status_4')
                         ->where('transaction_id', $item['TransactionId'])
                         ->first();
 
@@ -877,7 +877,7 @@ class MobileController extends Controller
 
                     if ($existing) {
                         // Update existing record
-                        DB::table('beneficiary_transaction_status')
+                        DB::table('beneficiary_transaction_status_4')
                             ->where('transaction_id', $item['TransactionId'])
                             ->update([
                                 'beneficiary_no' => $item['BeneficiaryNo'],
@@ -894,7 +894,7 @@ class MobileController extends Controller
                             ]);
                     } else {
                         // Insert new record
-                        DB::table('beneficiary_transaction_status')->insert([
+                        DB::table('beneficiary_transaction_status_4')->insert([
                             'transaction_id' => $item['TransactionId'],
                             'beneficiary_no' => $item['BeneficiaryNo'],
                             'payment_status' => $item['PaymentStatus'],
@@ -921,7 +921,7 @@ class MobileController extends Controller
                     ]);
 
                     // Update related table
-                    DB::table('sa_app_beneficiary_list')
+                    DB::table('sa_app_beneficiary_list_4')
                         ->where('transaction_id', $item['TransactionId'])
                         ->update([
                             'payment_status' => $item['PaymentStatus'],
