@@ -970,8 +970,7 @@ class MobileController extends Controller
         }
     }
 
-    //beneficiary images
-    public function beneficiaryImagesV1(Request $request)
+    public function beneficiaryImagesOld(Request $request)
     {
         try {
             // === 1) Bearer token validation ===
@@ -1095,6 +1094,7 @@ class MobileController extends Controller
         }
     }
 
+    //beneficiary images
     public function beneficiaryImages(Request $request)
     {
         try {
@@ -1142,12 +1142,12 @@ class MobileController extends Controller
                     [
                         'BeneficiaryNumber' => 'required|string',
                         'ImageId'           => 'required|string',
-                        'ImageUrl'          => 'required|string',
-                        'ImageCategory'     => 'required|integer|in:1,2,3',
+                        'ImageUrl'          => 'required|string',            // base64
+                        'ImageCategory'     => 'required|integer|in:1,2,3,4,5,6',  // only 1,2,3,4,5,6 allowed
                         'ImageDescription'  => 'nullable|string',
                     ],
                     [
-                        'ImageCategory.in' => 'ImageCategory must be one of: 1 (beneficiary_image), 2 (Guardian_image), 3 (other).',
+                        'ImageCategory.in'  => 'ImageCategory must be one of: 1 (beneficiary_image), 2 (beneficiary_signature), 3 (guardian_image) 4 (guardian_signature) 5 (G&C_teacher_image) 6 (G&C_teacher_signature).',
                     ]
                 );
 
@@ -1218,6 +1218,7 @@ class MobileController extends Controller
             ], 500);
         }
     }
+
 
     //submit deposit slip
     public function submitDepositSlip(Request $request)
