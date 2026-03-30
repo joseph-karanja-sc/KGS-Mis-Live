@@ -2117,11 +2117,10 @@ class UserManagementController extends BaseController
 
             // update sa_app_user_details 
             DB::table('sa_app_user_details')
-                ->where('users_id', $req->input('original_user_id'))
+                ->where('user_id', $req->input('original_user_id'))
                 ->update([
                     'zonal_accountant' => ($account_type === 'zonal_accountant' ? 1 : 0),
-                    'updated_at' => now(),
-                    'updated_by' => $user_id
+                    'updated_at' => now()
             ]);
 
             /* END OF OLD COMPATIBILITY */
