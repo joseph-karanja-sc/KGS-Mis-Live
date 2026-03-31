@@ -4205,7 +4205,7 @@ class MobileController extends Controller
                 $logId = DB::table('pg_payment_logs')->insertGetId([
                     "payment_ref_no"   => $payment_ref_no,
                     "transaction_id"   => $tid,
-                    "payment_phase"    => $record->payment_phase ?? 0,
+                    "payment_phase"    => property_exists($record, 'payment_phase') ? $record->payment_phase : 0,
                     "request_url"      => $url,
                     "request_payload"  => json_encode($payloadItem),
                     "headers"          => json_encode($headers),
@@ -4214,13 +4214,18 @@ class MobileController extends Controller
                     "updated_at"       => now()
                 ]);
 
-                dd("INSERT SUCCESS", $logId);
-
             } catch (\Throwable $e) {
-                dd([
+
+                \Log::error("PG LOG INSERT FAILED", [
                     "error" => $e->getMessage(),
-                    "file"  => $e->getFile(),
-                    "line"  => $e->getLine()
+                    "payload_size" => strlen(json_encode($payloadItem)),
+                    "headers_size" => strlen(json_encode($headers))
+                ]);
+
+                return response()->json([
+                    "status" => false,
+                    "message" => "Failed to log PG request",
+                    "error" => $e->getMessage()
                 ]);
             }
 
