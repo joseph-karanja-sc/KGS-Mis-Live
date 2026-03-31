@@ -1634,6 +1634,17 @@ async function triggerPGSubmission(refNo, category, btn = null) {
     }
 }
 
+function handleDisbursementClick(btn) {
+
+    const refNo = document.getElementById("disburseRefNo").value;
+
+    // get category from global context (you already set this earlier)
+    const category = window.pgContext?.category || '';
+
+    // call your real API function
+    triggerPGSubmission(refNo, category, btn);
+}
+
 
 </script>
 <!-- ================================
@@ -1709,7 +1720,7 @@ async function triggerPGSubmission(refNo, category, btn = null) {
 
         <div class="modal-footer">
             <button class="btn-cancel" onclick="closeDisburseModal()">Cancel</button>
-            <button id="disburseBtn" class="btn-submit" onclick="initiateDisbursement()">Disburse Funds</button>
+            <button id="disburseBtn" class="btn-submit" onclick="handleDisbursementClick(this)">Disburse Funds</button>
         </div>
 
     </div>
