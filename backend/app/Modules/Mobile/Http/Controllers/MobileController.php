@@ -4276,6 +4276,7 @@ class MobileController extends Controller
             ]);
         }
     }
+
     //retry single school payment
     public function retrySingleSchoolPayment(Request $request)
     {
@@ -4821,6 +4822,85 @@ class MobileController extends Controller
             'status' => true,
             'count' => $rows->count(),
             'images' => $rows
+        ]);
+    }
+
+
+
+    public function migrateBeneficiariesToReport()
+    {
+        $now = Carbon::now();
+
+        // process in chunks to avoid memory / CPU issues
+        DB::table('sa_app_beneficiary_list_5')
+            ->orderBy('id')
+            ->chunk(500, function ($records) use ($now) {
+
+                $insertData = [];
+
+                foreach ($records as $row) {
+
+                    // generate transaction id
+                    $uuid = Str::uuid();
+                    $timestamp = $now->timestamp;
+                    $transactionId = "KGS_TID_{$uuid}_{$timestamp}";
+
+                    // split fullname
+                    $names = explode(' ', trim($row->hhh_fullname));
+                    $firstName = $names[0] ?? null;
+                    $lastName = count($names) > 1 ? end($names) : null;
+
+                    $insertData[] = [
+                        // mapping
+                        'school_id' => $row->school_id,
+                        'beneficiary_id' => $row->girl_id,
+                        'beneficiary_no' => $row->beneficiary_id,
+                        'first_name' => $row->first_name,
+                        'last_name' => $row->surname,
+
+                        // defaults
+                        'year_of_enrollment' => 2026,
+                        'term_id' => 1,
+                        'grant_amount' => 800.00,
+                        'grant_yr_received' => 2026,
+                        'payment_ref_no' => 'KGS/PAY/REQ/2026/0001',
+
+                        // additional mappings
+                        'school_grade' => $row->confirmed_grade,
+                        'dob' => $row->verified_dob,
+                        'school_name' => $row->school_name,
+                        'school_district' => $row->school_district,
+
+                        // statuses
+                        'payment_status' => 'Pending Release',
+                        'payment_status_id' => 1,
+                        'payment_phase' => 1,
+
+                        // household head
+                        'hhh_nrc_number' => $row->hhh_NRC,
+                        'hhh_fname' => $firstName,
+                        'hhh_lname' => $lastName,
+
+                        // transaction fields
+                        'transaction_id' => $transactionId,
+                        'transaction_time_initiated' => $now,
+
+                        // flags
+                        'in_excel' => 1,
+
+                        // timestamps
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+
+                // bulk insert
+                DB::table('beneficiary_payresponses_report')->insert($insertData);
+            });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Migration completed successfully'
         ]);
     }
 
