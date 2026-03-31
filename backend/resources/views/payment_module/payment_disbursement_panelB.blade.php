@@ -755,7 +755,7 @@ function loadSummary() {
                                 <button class="kgs-menu-btn">Actions ▼</button>
 
                                 <ul class="kgs-menu-list">
-                                    <li onclick="openPaymentPhases('${row.payment_ref_no}')">View</li>
+                                    <li onclick="handleView('${row.payment_ref_no}', '${row.payment_category}')">View</li>
                                     <li onclick="panelBApproval('${row.payment_ref_no}')">Approve Payment Request</li>
                                 </ul>
 
@@ -820,6 +820,124 @@ function loadBeneficiaries(refNo) {
                         <td>${row.beneficiary_no ?? '-'}</td>
                         <td>${row.school_name ?? '-'}</td>
                         <td>${row.status ?? '-'}</td>
+                    </tr>
+                `;
+            });
+
+            html += "</tbody></table>";
+
+            document.getElementById("appContainer").innerHTML = html;
+        });
+}
+
+function handleView(refNo, category) {
+
+    if (category === 'School Fees') {
+        openSchoolSummary(refNo);
+    } 
+    else if (category === 'Education Grant') {
+        openDistrictSummary(refNo);
+    } 
+    else {
+        // fallback to existing behavior
+        openPaymentPhases(refNo);
+    }
+}
+
+function openSchoolSummary(refNo) {
+
+    breadcrumbStack.push({
+        label: refNo,
+        action: () => openSchoolSummary(refNo)
+    });
+
+    renderBreadcrumbs();
+    renderTabs([], "School Summary");
+
+    document.getElementById("appContainer").innerHTML = `<h3>Loading school summary...</h3>`;
+
+    fetch(`/api/zispis/v1/pg-schoolfee_summary`)
+        .then(res => res.json())
+        .then(json => {
+
+            if (!json.success || json.data.length === 0) {
+                document.getElementById("appContainer").innerHTML =
+                    `<div class="empty-state">No school summary data found.</div>`;
+                return;
+            }
+
+            let html = `
+                <h3>School Fee Summary</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>School Name</th>
+                            <th>EMIS Code</th>
+                            <th>Total Beneficiaries</th>
+                            <th>Total Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            json.data.forEach(row => {
+                html += `
+                    <tr>
+                        <td>${row.school_name}</td>
+                        <td>${row.school_emis}</td>
+                        <td>${row.total_beneficiaries}</td>
+                        <td>${Number(row.total_amount).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            html += "</tbody></table>";
+
+            document.getElementById("appContainer").innerHTML = html;
+        });
+}
+
+function openDistrictSummary(refNo) {
+
+    breadcrumbStack.push({
+        label: refNo,
+        action: () => openDistrictSummary(refNo)
+    });
+
+    renderBreadcrumbs();
+    renderTabs([], "District Summary");
+
+    document.getElementById("appContainer").innerHTML = `<h3>Loading district summary...</h3>`;
+
+    fetch(`/api/zispis/v1/pg-grant-summary`)
+        .then(res => res.json())
+        .then(json => {
+
+            if (!json.success || json.data.length === 0) {
+                document.getElementById("appContainer").innerHTML =
+                    `<div class="empty-state">No district summary data found.</div>`;
+                return;
+            }
+
+            let html = `
+                <h3>District Grant Summary</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>District Name</th>
+                            <th>Total Beneficiaries</th>
+                            <th>Total Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            json.data.forEach(row => {
+                html += `
+                    <tr>
+                        <td>${row.district_name}</td>
+                        <td>${row.total_beneficiaries}</td>
+                        <td>${Number(row.total_amount).toLocaleString()}</td>
                     </tr>
                 `;
             });
