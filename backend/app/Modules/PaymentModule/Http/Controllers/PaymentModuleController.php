@@ -2776,9 +2776,9 @@ class PaymentModuleController extends BaseController
                 $qry = DB::table('beneficiary_payresponses_report as t5')
                     ->select('t5.id as enrollment_id')
                     ->join('school_information as t2', 't5.school_id', '=', 't2.id')
-                    // ->leftJoin('beneficiary_payment_records as t7', 't5.id', '=', 't7.enrollment_id')
+                    ->leftJoin('beneficiary_payment_records as t7', 't5.id', '=', 't7.enrollment_id')
                     ->where(array('t2.id' => $school_id, 't5.year_of_enrollment' => $payment_year))
-                    // ->whereNull('t7.id')
+                    ->whereNull('t7.id')
                     ->get();
                 $data = array();
                 //just to be sure...already we have checked for null of payment records id....
@@ -5461,7 +5461,7 @@ class PaymentModuleController extends BaseController
                 ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
                 ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
                 //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
-                // ->whereNull('t8.payment_request_id')
+                ->whereNull('t8.payment_request_id')
                 ->where(array('t5.year_of_enrollment' => $year_of_enrollment));
             if (isset($province_id) && $province_id != '') {
                 $qry->where('t2.province_id', $province_id);
@@ -5838,19 +5838,11 @@ class PaymentModuleController extends BaseController
                     branch_name,t9.bank_id,decrypt(t9.account_no) as 
                     account_no,b2.sort_code,count(t1.id) as no_of_beneficiary,
 
-                    SUM(
-                      IF(decrypt(t5.term1_fees) IS NULL OR decrypt(t5.term1_fees) < 0, 0, decrypt(t5.term1_fees)) +
-                      IF(decrypt(t5.term2_fees) IS NULL OR decrypt(t5.term2_fees) < 0, 0, decrypt(t5.term2_fees)) +
-                      IF(decrypt(t5.term3_fees) IS NULL OR decrypt(t5.term3_fees) < 0, 0, decrypt(t5.term3_fees))
-                    ) as school_feessummary,
-                    SUM(
-                      IF(decrypt(t5.term1_fees) IS NULL OR decrypt(t5.term1_fees) < 0, 0, decrypt(t5.term1_fees)) +
-                      IF(decrypt(t5.term2_fees) IS NULL OR decrypt(t5.term2_fees) < 0, 0, decrypt(t5.term2_fees)) +
-                      IF(decrypt(t5.term3_fees) IS NULL OR decrypt(t5.term3_fees) < 0, 0, decrypt(t5.term3_fees))
-                    ) as payable_amount,
+                    t5.total_payable_fees as school_feessummary,
+                    t5.total_payable_fees as payable_amount,
                     t2.name as school_name,t3.name as district_name,
                     t4.name as province_name,t13.name as running_agency'))
-                ->join('beneficiary_enrollments as t5', 't1.id', '=', 
+                ->join('beneficiary_payresponses_report as t5', 't1.beneficiary_id', '=', 
                     't5.beneficiary_id')
                 ->join('school_information as t2', 't2.id', '=', 't5.school_id')
                 ->leftjoin('school_running_agencies as t13','t2.running_agency_id',
