@@ -5371,11 +5371,7 @@ class PaymentModuleController extends BaseController
         $running_agency_details=explode(',',$running_agency_details);
         }
         
-        DB::table('orders')->join('shipments', function ($join) {$join
-            ->on('orders.id', '=', 'shipments.order_id')
-            ->on('orders.created_at', '<', 'shipments.shipped_at');
-                // different operator->where('shipments.status', '=', 'active');
-                // additional where})->get();
+        
         try {
             $qry = DB::table('beneficiary_payresponses_report as t5')
              ->select(DB::raw(' t2.id as school_id, t2.name as school_name, t5.year_of_enrollment,
