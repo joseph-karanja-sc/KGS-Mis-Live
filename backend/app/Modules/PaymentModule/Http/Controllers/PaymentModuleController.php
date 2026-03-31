@@ -5827,7 +5827,7 @@ class PaymentModuleController extends BaseController
             {
             $running_agency_details=explode(',',$running_agency_details);
             }
-            $qry = DB::table('beneficiary_information as t1')
+            $qry = DB::table('beneficiary_payresponses_report as t5')
                 ->select(DB::raw('t12.name as payment_status, t11.id as 
                     payment_disbursement_id,decrypt(t11.amount_transfered) as 
                     amount_transfered,t11.imbalance_reason,t11.school_bank_id,
@@ -5836,20 +5836,19 @@ class PaymentModuleController extends BaseController
                     t2.id as school_id,t8.payment_request_id,
                     b1.name as bank_name,b2.name as 
                     branch_name,t9.bank_id,decrypt(t9.account_no) as 
-                    account_no,b2.sort_code,count(t1.id) as no_of_beneficiary,
+                    account_no,b2.sort_code,count(t5.id) as no_of_beneficiary,
 
                     t5.total_payable_fees as school_feessummary,
                     t5.total_payable_fees as payable_amount,
                     t2.name as school_name,t3.name as district_name,
                     t4.name as province_name,t13.name as running_agency'))
-                ->join('beneficiary_payresponses_report as t5', 't1.beneficiary_id', '=', 
-                    't5.beneficiary_id')
                 ->join('school_information as t2', 't2.id', '=', 't5.school_id')
                 ->leftjoin('school_running_agencies as t13','t2.running_agency_id',
                     't13.id')//job on 4/05/2022
                 ->join('districts as t3', 't2.district_id', '=', 't3.id')
                 ->join('provinces as t4', 't3.province_id', '=', 't4.id')
-                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
+                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 
+                't8.enrollment_id')
                 ->leftJoin('payment_disbursement_details as t11', function ($join) {
                     $join->on('t8.payment_request_id', '=', 't11.payment_request_id');
                     $join->on('t2.id', '=', 't11.school_id');
@@ -5857,9 +5856,11 @@ class PaymentModuleController extends BaseController
                 ->leftJoin('school_bankinformation as t9', 't11.school_bank_id', '=', 't9.id')
                 ->leftJoin('bank_details as b1', 't9.bank_id', '=', 'b1.id')
                 ->leftJoin('bank_branches as b2', 't9.branch_name', '=', 'b2.id')
-                ->leftJoin('payment_disbursement_status as t12', 't11.payment_status_id', '=', 't12.id')
+                ->leftJoin('payment_disbursement_status as t12', 
+                't11.payment_status_id', '=', 't12.id')
                 ->where(array('t8.payment_request_id' => $payment_request_id))
-                ->whereRaw("IF(`t8`.`payment_request_id` = `t11`.`payment_request_id`, `payment_status_id` = 1,1)");
+                ->whereRaw("IF(`t8`.`payment_request_id` = `t11`.`payment_request_id`, 
+                `payment_status_id` = 1,1)");
             if (isset($filter_id) && $filter_id != '') {
                 if ($filter_id == 1) {
                     $qry->whereNotNull('t11.id');
