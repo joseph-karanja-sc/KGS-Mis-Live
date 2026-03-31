@@ -4184,11 +4184,12 @@ class MobileController extends Controller
 
             // dd($headers);
 
-            // log request
+            // log requests
             $logId = DB::table('pg_payment_logs')->insertGetId([
                 "payment_ref_no"   => $payment_ref_no,
                 "reference_id"     => $record->id,
                 "transaction_id"   => $tid,
+                "payment_phase"    => $record->payment_phase ?? 0,
                 "request_url"      => $url,
                 "request_payload"  => json_encode($payloadItem),
                 "headers"          => json_encode($headers),
