@@ -4184,22 +4184,6 @@ class MobileController extends Controller
 
             // dd($headers);
 
-            // log requests
-            // $logId = DB::table('pg_payment_logs')->insertGetId([
-            //     "payment_ref_no"   => $payment_ref_no ?? 0,
-            //     "reference_id"     => $record->id ?? 0,
-            //     "transaction_id"   => $tid ?? 0,
-            //     "payment_phase"    => $record->payment_phase ?? 0,
-            //     "request_url"      => $url ?? 0,
-            //     "request_payload"  => json_encode($payloadItem) ?? 0,
-            //     "headers"          => json_encode($headers) ?? 0,
-            //     "status"           => "pending",
-            //     "created_at"       => now(),
-            //     "updated_at"       => now()
-            // ]);
-
-            // dd($logId);
-
             try {
 
                 $logId = DB::table('pg_payment_logs')->insertGetId([
