@@ -5393,11 +5393,11 @@ class PaymentModuleController extends BaseController
                 ->join('provinces as t4', 't3.province_id', '=', 't4.id')
                 // ->join('payment_verificationbatch as t6', 't5.batch_id', '=', 't6.id')
                 ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
-                // ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
+                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
 
                 
                 //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
-                // ->whereNull('t8.payment_request_id')
+                ->whereNull('t8.payment_request_id')
                 // ->where('t8.created_at', '>', '2026-03-30 00:00:00')
                 // ->where('t8.payment_request_id', '!=', 55)
                 ->where(array('t5.year_of_enrollment' => $year_of_enrollment));
@@ -5425,10 +5425,16 @@ class PaymentModuleController extends BaseController
 
               
             $results = $qry->get();
+            // $res = array(
+            //     'success' => true,
+            //     'results' => $results,
+            //     'totalCount' => $total,
+            //     'message' => 'All is well'
+            // );
             $res = array(
                 'success' => true,
-                'results' => $results,
-                'totalCount' => $total,
+                'results' => null,
+                'totalCount' => null,
                 'message' => 'All is well'
             );
         } catch (\Exception $e) {
