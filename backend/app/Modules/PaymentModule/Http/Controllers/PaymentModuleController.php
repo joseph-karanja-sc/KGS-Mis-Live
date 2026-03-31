@@ -2772,9 +2772,16 @@ class PaymentModuleController extends BaseController
         // $records = explode(',', $data);
     
         try {
-            $records = DB::table('beneficiary_payresponses_report')
-            ->pluck('school_id') 
-            ->toArray();
+            $records = DB::table('beneficiary_payresponses_report as t5')
+                ->leftJoin('beneficiary_payment_records as t8', function ($join) {
+                    $join->on('t5.id', '=', 't8.enrollment_id')
+                        ->where('t8.payment_request_id', '=', 55);
+                })
+                ->whereNull('t8.enrollment_id')
+                ->distinct()
+                ->pluck('t5.school_id')
+                ->toArray();
+
             foreach ($records as $school_id) {
                 $qry = DB::table('beneficiary_payresponses_report as t5')
                     ->select('t5.id as enrollment_id')
@@ -5387,10 +5394,6 @@ class PaymentModuleController extends BaseController
                 // ->join('payment_verificationbatch as t6', 't5.batch_id', '=', 't6.id')
                 ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
                 // ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
-                // ->leftJoin('beneficiary_payment_records as t8', function ($join) {
-                //     $join->on('t5.id', '=', 't8.enrollment_id')
-                //         ->on('t8.payment_request_id', '!=', 55); 
-                // })
 
                 
                 //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
