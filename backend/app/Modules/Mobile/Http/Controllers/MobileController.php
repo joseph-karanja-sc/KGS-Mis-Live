@@ -2580,6 +2580,7 @@ class MobileController extends Controller
                 DB::raw("CONCAT(decrypt(t3.first_name), ' ', decrypt(t3.last_name)) AS prepared_by"),
                 'w.name as workflow_status'
             )
+            ->where('t1.is_active', 1)
             ->get();
 
         return response()->json([
