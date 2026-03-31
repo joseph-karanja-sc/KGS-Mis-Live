@@ -2778,7 +2778,8 @@ class PaymentModuleController extends BaseController
                     ->join('school_information as t2', 't5.school_id', '=', 't2.id')
                     ->leftJoin('beneficiary_payment_records as t7', 't5.id', '=', 't7.enrollment_id')
                     ->where(array('t2.id' => $school_id, 't5.year_of_enrollment' => $payment_year))
-                    ->whereNull('t7.id')
+                    // ->whereNull('t7.id')
+                    ->where('t7.payment_request_id', '!=', 55)
                     ->get();
                 $data = array();
                 //just to be sure...already we have checked for null of payment records id....
