@@ -5154,11 +5154,10 @@ class PaymentModuleController extends BaseController
             // Set new limit
             ini_set('max_execution_time', 30000); 
         
-            $qry = DB::table('beneficiary_information as t1')
-                ->join('school_information as t2', 't1.school_id', '=', 't2.id')
+            $qry = DB::table('beneficiary_payresponses_report as t5')
+                ->join('school_information as t2', 't5.school_id', '=', 't2.id')
                 ->leftJoin('districts as t3', 't2.district_id', '=', 't3.id')
                 ->leftJoin('provinces as t4', 't3.province_id', '=', 't4.id')
-                ->join('beneficiary_payresponses_report as t5', 't1.id', '=', 't5.beneficiary_id')
                 ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
                 ->join('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
                 //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
@@ -5166,12 +5165,12 @@ class PaymentModuleController extends BaseController
                     $join->on('t8.payment_request_id', '=', 't11.payment_request_id');
                     $join->on('t2.id', '=', 't11.school_id');
                 })
-                ->select(DB::raw("t2.id as school_id, t1.id as beneficiary_id, t5.id as enrollment_id,
-                t1.beneficiary_id as beneficiary_no, t5.year_of_enrollment,
+                ->select(DB::raw("t2.id as school_id, t5.girl_id as beneficiary_id, t5.id as enrollment_id,
+                t5.beneficiary_id as beneficiary_no, t5.year_of_enrollment,
                 t5.term1_fee as school_fees,  
                 t5.term1_fee as term1_fees,0 as term2_fees,
                 0 as term3_fees,t5.exam_fees as exam_fees, t5.confirmed_grade as school_grade, 
-                t1.dob, decrypt(t1.first_name) as first_name, decrypt(t1.last_name) as last_name,
+                t5.verified_dob as dob, t5.first_name, t5.surname as last_name,
                 t2.name as school_name,t2.name as school_name2, t3.name as school_district, 
                 t4.name as school_province,t7.name as school_status"))
                 ->where(array('t8.payment_request_id' => $payment_request_id))
@@ -5187,37 +5186,8 @@ class PaymentModuleController extends BaseController
             if (isset($district_id) && $district_id != '') {
                 $qry->where('t3.id', $district_id);
             }
-
-            // if(isset($school_fees_status) && $school_fees_status!="")//Job on 30/05/2022
-            // {
-            //     // if($school_fees_status==1){
-            //     // $qry->whereRaw('t5.annual_fees>0');
-            //     // }else{
-            //     //     $qry->whereRaw('decrypt(t5.annual_fees)=0');
-            //     // }
-            // }
             $results = $qry->get()->toArray();
-            $new_entrants_year = date('Y');
-            // if ($new_entrants == 1) {
-            //     $old_beneficiries = Db::select("SELECT t5.beneficiary_id as ben_id FROM beneficiary_enrollments AS t1 
-            //     INNER JOIN beneficiary_payment_records AS t2 ON t1.id=t2.enrollment_id LEFT JOIN beneficiary_information as t5 on t5.id=t1.beneficiary_id  
-            //     WHERE t1.year_of_enrollment<$new_entrants_year  GROUP BY t1.beneficiary_id");
-            //     $old_beneficiries_data = array();
-
-            //     foreach ($old_beneficiries as $ben_data) {
-            //         $old_beneficiries_data[] = $ben_data->ben_id;
-            //     }
-            //     $new_entrants_data = array();
-
-
-            //     foreach ($results as $key => $result) {
-            //         if (!in_array($result->beneficiary_no, $old_beneficiries_data)) {
-            //             $new_entrants_data[] = $result;
-            //         }
-            //     }
-
-            //     $results = $new_entrants_data;
-            // }
+            
             $res = array(
                 'success' => true,
                 'results' => $results,
