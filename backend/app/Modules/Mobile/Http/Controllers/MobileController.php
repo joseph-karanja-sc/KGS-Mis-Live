@@ -4377,7 +4377,7 @@ class MobileController extends Controller
             "TransactionType"  => "Education Grant",
 
             // ✅ FIXED (important!)
-            "Amount"           => floatval($row->grant_amount),
+            "Amount"           => floatval($row->grant_amount_test),
 
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
