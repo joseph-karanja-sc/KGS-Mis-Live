@@ -2798,7 +2798,7 @@ class MobileController extends Controller
             ], 400);
         }
 
-        $rows = DB::table('sa_app_beneficiary_list_3 as t1')
+        $rows = DB::table('sa_app_beneficiary_list_5 as t1')
             ->select(
                 't1.beneficiary_no',
                 't1.first_name',
@@ -4895,6 +4895,51 @@ class MobileController extends Controller
             'success' => true,
             'message' => 'Migration completed successfully',
             'rows_inserted' => $totalInserted
+        ]);
+    }
+
+    public function getDistrictGrantSummary()
+    {
+        $data = DB::table('pg_district_grant_schedule as t1')
+            ->leftJoin('districts as t2', 't1.district_id', '=', 't2.id')
+            ->select(
+                't2.name as district_name',
+                't1.bank_name as district_bank',
+                't1.bank_account as district_bank_account',
+                't1.sort_code as district_sort_code',
+                DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
+                DB::raw('SUM(t1.grant_amount) as total_amount')
+            )
+            ->groupBy('t1.district_id', 't2.name')
+            ->orderBy('total_amount', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
+    }
+
+    public function getSchoolFeeSummary()
+    {
+        $data = DB::table('pg_school_fee_schedule as t1')
+            ->leftJoin('school_information as t2', 't1.school_id', '=', 't2.id')
+            ->select(
+                't2.name as school_name',
+                't2.code as school_emis',
+                't1.bank_name as school_bank',
+                't1.bank_account as school_bank_account',
+                't1.sort_code as school_sort_code',
+                DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
+                DB::raw('SUM(t1.fee_amount) as total_amount')
+            )
+            ->groupBy('t1.school_id', 't2.name', 't2.code')
+            ->orderBy('total_amount', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
         ]);
     }
 
