@@ -4182,7 +4182,7 @@ class MobileController extends Controller
             $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
             $headers = $this->preparePGHeaders();
 
-            dd($headers);
+            // dd($headers);
 
             // log request
             $logId = DB::table('pg_payment_logs')->insertGetId([
@@ -4196,6 +4196,8 @@ class MobileController extends Controller
                 "created_at"       => now(),
                 "updated_at"       => now()
             ]);
+
+            dd(logId);
 
             $processed++;
 
