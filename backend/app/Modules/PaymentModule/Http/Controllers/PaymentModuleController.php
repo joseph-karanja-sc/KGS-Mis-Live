@@ -2769,9 +2769,12 @@ class PaymentModuleController extends BaseController
         $term_id = $req->input('term_id');
         $payment_year = $req->input('payment_year');
         $data = $req->input('data');
-        $records = explode(',', $data);
+        // $records = explode(',', $data);
     
         try {
+            $records = DB::table('beneficiary_payresponses_report as t5')
+                    ->select('t5.school_id')
+                    ->get();
             foreach ($records as $school_id) {
                 $qry = DB::table('beneficiary_payresponses_report as t5')
                     ->select('t5.id as enrollment_id')
