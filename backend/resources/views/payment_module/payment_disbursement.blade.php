@@ -567,16 +567,12 @@ function openPayment(refNo, category) {
 
 function handleView(refNo, category) {
 
-    if (category === 'School Fees') {
+    if (category === 'school fees') {
         openSchoolSummary(refNo);
     } 
-    else if (category === 'Education Grant') {
+    else if (category === 'education grant') {
         openDistrictSummary(refNo);
     } 
-    else {
-        // fallback to existing behavior
-        openPaymentPhases(refNo);
-    }
 }
 
 function openSchoolSummary(refNo) {
