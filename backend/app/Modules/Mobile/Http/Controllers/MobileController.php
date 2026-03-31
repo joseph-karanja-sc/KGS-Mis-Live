@@ -4862,7 +4862,7 @@ class MobileController extends Controller
                         'year_of_enrollment' => 2026,
                         'term_id' => 1,
                         'grant_amount' => 800.00,
-                        'grant_yr_received' => 2026,
+                        'grant_yr_received' => $now,
                         'payment_ref_no' => 'KGS/PAY/REQ/2026/0001',
 
                         // additional mappings
