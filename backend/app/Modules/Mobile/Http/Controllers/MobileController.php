@@ -4269,6 +4269,12 @@ class MobileController extends Controller
             $row->transaction_id = $tid;
         }
 
+        // ✅ join school_information
+        $school = DB::table('school_information')
+            ->where('id', $row->school_id)
+            ->select('code', 'name')
+            ->first();
+
         return [
             "TransactionID"    => $row->transaction_id,
             "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
@@ -4276,9 +4282,9 @@ class MobileController extends Controller
             "RecipientID"      => Str::uuid()->toString(),
             "RecipientType"    => "School",
 
-            // ✅ UPDATED
-            "FirstName"        => $row->code ?? "0",   // EMIS code
-            "LastName"         => $row->name ?? "0",   // school name
+            // ✅ FIXED
+            "FirstName"        => $school->code ?? "0",   // EMIS
+            "LastName"         => $school->name ?? "0",   // school name
 
             "MobileNumber"     => "",
             "Language"         => "English",
@@ -4323,11 +4329,17 @@ class MobileController extends Controller
             $tid = "KGSTRIDT-" . Str::uuid()->toString();
 
             DB::table('pg_district_grant_schedule')
-                ->where('id', $row->id)
+                ->where('id', $row->id) // ✅ FIXED
                 ->update(['transaction_id' => $tid]);
 
             $row->transaction_id = $tid;
         }
+
+        // ✅ fetch district info
+        $district = DB::table('districts')
+            ->where('id', $row->district_id)
+            ->select('code', 'name')
+            ->first();
 
         return [
             "TransactionID"    => $row->transaction_id,
@@ -4336,9 +4348,9 @@ class MobileController extends Controller
             "RecipientID"      => Str::uuid()->toString(),
             "RecipientType"    => "District",
 
-            // ✅ UPDATED
-            "FirstName"        => $row->code ?? "0",   // district code
-            "LastName"         => $row->name ?? "0",   // district name
+            // ✅ FIXED
+            "FirstName"        => $district->code ?? "0",
+            "LastName"         => $district->name ?? "0",
 
             "MobileNumber"     => "",
             "Language"         => "English",
@@ -4348,7 +4360,7 @@ class MobileController extends Controller
             "PSP"              => $row->bank_name ?? "ZANACO",
 
             "Province"         => "0",
-            "District"         => $row->name ?? "0",
+            "District"         => $district->name ?? "0",
 
             "Ward"             => "0",
 
@@ -4364,7 +4376,8 @@ class MobileController extends Controller
             "Currency"         => "ZMW",
             "TransactionType"  => "Education Grant",
 
-            "Amount"           => floatval($row->grant_amount_test),
+            // ✅ FIXED (important!)
+            "Amount"           => floatval($row->grant_amount),
 
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
