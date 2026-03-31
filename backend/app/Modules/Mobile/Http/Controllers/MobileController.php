@@ -4176,6 +4176,8 @@ class MobileController extends Controller
                 ? $this->buildSchoolPayload($record)
                 : $this->buildDistrictPayload($record);
 
+            dd($payloadItem);
+
             $tid = $payloadItem["TransactionID"];
             $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
             $headers = $this->preparePGHeaders();
@@ -4362,7 +4364,7 @@ class MobileController extends Controller
             "Currency"         => "ZMW",
             "TransactionType"  => "Education Grant",
 
-            "Amount"           => floatval($row->grant_amount),
+            "Amount"           => floatval($row->grant_amount_test),
 
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
@@ -4468,7 +4470,6 @@ class MobileController extends Controller
             ]);
         }
     }
-
     //retry single school payment
     public function retrySingleSchoolPayment(Request $request)
     {
