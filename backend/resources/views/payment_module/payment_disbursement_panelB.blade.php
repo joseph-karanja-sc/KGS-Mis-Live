@@ -759,7 +759,7 @@ function loadSummary() {
                                     <li onclick="panelBApproval('${row.payment_ref_no}')">Approve Payment Request</li>
                                     ${
                                         row.workflow_status?.toLowerCase() === "pending submission to pg"
-                                        ? `<li onclick="triggerPGSubmission('${row.payment_ref_no}', '${row.payment_category}')">
+                                        ? `<li onclick="openPGFlow('${row.payment_ref_no}', '${row.payment_category}')">
                                                 Submit Payment to PG
                                         </li>`
                                         : `<li style="opacity:0.4; pointer-events:none;">
@@ -954,6 +954,18 @@ function openDistrictSummary(refNo) {
 
             document.getElementById("appContainer").innerHTML = html;
         });
+}
+
+function openPGFlow(refNo, category) {
+
+    // store globally for later use
+    window.pgContext = {
+        refNo: refNo,
+        category: category
+    };
+
+    // phase no longer needed → pass null or 0
+    showPGModal(refNo, null);
 }
 
 
