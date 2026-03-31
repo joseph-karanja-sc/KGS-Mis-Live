@@ -5368,56 +5368,7 @@ class PaymentModuleController extends BaseController
         {
         $running_agency_details=explode(',',$running_agency_details);
         }
-        //job on 23/04/2022
-        $terms_to_include=[1,2];
-        $fees_string=[];
-        // if(count($terms_to_include)==3)
-        // {
-        //     $fees_string="sum(t5.annual_fees) as school_feessummary";
-        // }
-
-        $terms_to_exclude=[];
-        // for($i=1;$i<4;$i++)
-        // {
-        //     if(!in_array($i,$terms_to_include))
-        //     {
-        //         $terms_to_exclude[]=$i;
-        //     }
-        // }
-        // if(count($terms_to_exclude)==1 || count($terms_to_exclude)==2)
-        // {
-        //     foreach($terms_to_exclude as $term)
-        //     {
-        //         if($term==1)
-        //         {
-        //             $fees_string[]="t5.term1_fees";
-        //         }
-        //         if($term==2)
-        //         {
-        //             $fees_string[]="t5.term2_fees";
-        //         }
-        //         if($term==3)
-        //         {
-        //             $fees_string[]="t5.term3_fees";
-        //         }
-        //     }
-        // }
-
-        $final_fee_string="";
-        // if(is_array($fees_string))
-        // {
-        //     if(count($fees_string)==2)
-        //     {
-        //         $final_fee_string="sum(decrypt(t5.annual_fees)-(decrypt($fees_string[0])+decrypt($fees_string[1]))) as school_feessummary";
-        //         //$final_fee_string="decrypt($fees_string[0])+decrypt($fees_string[1])";
-        //     }else{
-        //         $final_fee_string="sum(decrypt(t5.annual_fees)-decrypt($fees_string[0])) as school_feessummary"; 
-        //     }
-        // }else{
-        //     $final_fee_string=$fees_string;
-        // }
         
-    
         try {
             $qry = DB::table('beneficiary_payresponses_report as t5')
              ->select(DB::raw(' t2.id as school_id, t2.name as school_name, t5.year_of_enrollment,
@@ -5431,7 +5382,8 @@ class PaymentModuleController extends BaseController
                 ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
                 ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
                 //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
-                ->whereNull('t8.payment_request_id')
+                // ->whereNull('t8.payment_request_id')
+                ->where('t8.payment_request_id', '!=', 55)
                 ->where(array('t5.year_of_enrollment' => $year_of_enrollment));
             if (isset($province_id) && $province_id != '') {
                 $qry->where('t2.province_id', $province_id);
