@@ -2786,7 +2786,8 @@ class PaymentModuleController extends BaseController
                 foreach ($qry as $rec) {
                     $enrollment_id = $rec->enrollment_id;
                     $table_data = array(
-                        'enrollment_id' => $enrollment_id
+                        'enrollment_id' => $enrollment_id,
+                        'payment_request_id' => 55
                     );
                     $qry = DB::table('beneficiary_payment_records')
                         ->where($table_data)
