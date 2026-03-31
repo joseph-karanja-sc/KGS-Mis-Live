@@ -1518,7 +1518,7 @@ async function initiateDisbursementOld() {
     }
 }
 
-async function initiateDisbursement() {
+async function triggerPGSubmission() {
 
     const refNo = document.getElementById("disburseRefNo").value;
 
