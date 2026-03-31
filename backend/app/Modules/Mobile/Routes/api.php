@@ -45,6 +45,8 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     Route::post('/submit-panel-b', 'MobileController@submitToPanelB');
     Route::post('/panelb-approval', 'MobileController@PanelBApproval');
     Route::get('/pg-coordinators', 'MobileController@getPGCoordinators');
+    Route::get('/pg-grant-summary', 'MobileController@getDistrictGrantSummary');
+    Route::get('/pg-schoolfee_summary', 'MobileController@getSchoolFeeSummary');
 
     // pg
     Route::post('/pg/submit-payment-to-pg', 'MobileController@submitPaymentToPGDebug');
