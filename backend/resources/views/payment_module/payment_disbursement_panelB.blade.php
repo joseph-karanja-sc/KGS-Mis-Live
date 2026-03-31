@@ -756,6 +756,7 @@ function loadSummary() {
 
                                 <ul class="kgs-menu-list">
                                     <li onclick="handleView('${row.payment_ref_no}', '${row.payment_category}')">View</li>
+                                    <li onclick="panelBApproval('${row.payment_ref_no}')">Approve Payment Request</li>
                                     ${
                                         row.workflow_status?.toLowerCase() === "pending submission to pg"
                                         ? `<li onclick="triggerPGSubmission('${row.payment_ref_no}')">Submit Payment to PG</li>`
