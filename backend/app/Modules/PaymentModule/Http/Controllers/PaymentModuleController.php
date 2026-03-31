@@ -2774,7 +2774,8 @@ class PaymentModuleController extends BaseController
         try {
             $records = DB::table('beneficiary_payresponses_report as t5')
                     ->select('t5.school_id')
-                    ->get();
+                    ->get()
+                    ->toArray();
             foreach ($records as $school_id) {
                 $qry = DB::table('beneficiary_payresponses_report as t5')
                     ->select('t5.id as enrollment_id')
