@@ -4836,6 +4836,7 @@ class MobileController extends Controller
             ->orderBy('id')
             ->chunk(500, function ($records) use ($now) {
 
+                logger('Chunk triggered, records count: ' . count($records));
                 $insertData = [];
 
                 foreach ($records as $row) {
@@ -4893,6 +4894,8 @@ class MobileController extends Controller
                         'updated_at' => $now,
                     ];
                 }
+
+                logger('Insert count: ' . count($insertData));
 
                 // bulk insert
                 DB::table('beneficiary_payresponses_report')->insert($insertData);
