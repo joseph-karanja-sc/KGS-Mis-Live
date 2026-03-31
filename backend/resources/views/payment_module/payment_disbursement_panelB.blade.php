@@ -759,11 +759,14 @@ function loadSummary() {
                                     <li onclick="panelBApproval('${row.payment_ref_no}')">Approve Payment Request</li>
                                     ${
                                         row.workflow_status?.toLowerCase() === "pending submission to pg"
-                                        ? `<li onclick="triggerPGSubmission('${row.payment_ref_no}')">Submit Payment to PG</li>`
-                                        : `<li style="opacity:0.4; pointer-events:none;">Submit Payment to PG (Locked)</li>`
+                                        ? `<li onclick="triggerPGSubmission('${row.payment_ref_no}', '${row.payment_category}')">
+                                                Submit Payment to PG
+                                        </li>`
+                                        : `<li style="opacity:0.4; pointer-events:none;">
+                                                Submit Payment to PG (Locked)
+                                        </li>`
                                     }
                                 </ul>
-
                             </div>
                         </td>
                     </tr>
@@ -1466,7 +1469,7 @@ function initiateDisbursement() {
     }, 3000);
 }
 
-async function initiateDisbursement() {
+async function initiateDisbursementOld() {
 
     const refNo = document.getElementById("disburseRefNo").value;
 
@@ -1495,6 +1498,58 @@ async function initiateDisbursement() {
         const json = await response.json();
 
         // Remove loading state
+        btn.classList.remove("btn-loading");
+        btn.innerText = "Disburse Funds";
+        closeDisburseModal();
+
+        if (json.status === true) {
+            showToast("success", json.message ?? "Disbursement completed.");
+        } else {
+            showToast("error", json.message ?? "Disbursement failed.");
+        }
+
+    } catch (error) {
+        btn.classList.remove("btn-loading");
+        btn.innerText = "Disburse Funds";
+        closeDisburseModal();
+
+        showToast("error", "Network or server error.");
+        console.error("Disbursement error:", error);
+    }
+}
+
+async function initiateDisbursement() {
+
+    const refNo = document.getElementById("disburseRefNo").value;
+
+    // 🔥 determine type (IMPORTANT)
+    const category = window.currentPaymentCategory || ''; 
+
+    const paymentType =
+        category.toLowerCase().includes('school') ? 'school' : 'district';
+
+    const btn = event.target;
+    btn.classList.add("btn-loading");
+    btn.innerText = "Processing...";
+
+    try {
+
+        const response = await fetch(
+            "https://kgsmis.edu.gov.zm/api/zispis/v1/processAllSchoolsForPG",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    payment_ref_no: refNo,
+                    payment_type: paymentType   // ✅ NEW
+                })
+            }
+        );
+
+        const json = await response.json();
+
         btn.classList.remove("btn-loading");
         btn.innerText = "Disburse Funds";
         closeDisburseModal();

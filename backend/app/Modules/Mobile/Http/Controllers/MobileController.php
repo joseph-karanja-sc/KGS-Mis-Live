@@ -3905,7 +3905,7 @@ class MobileController extends Controller
 
 
     //final working functions
-    public function processAllSchoolsForPGOld()
+    public function processAllSchoolsForPG1()
     {
         $batchSize = 1; // process 1 at a time (required by PG)
 
@@ -3991,7 +3991,9 @@ class MobileController extends Controller
             }
         }
     }
-    public function processAllSchoolsForPG(Request $request)
+
+    //pg disbursement main function
+    public function processAllSchoolsForPG2(Request $request)
     {
 
         $payment_ref_no = $request->payment_ref_no;
@@ -4118,67 +4120,257 @@ class MobileController extends Controller
             }
         }
     }
-    private function buildSingleSchoolPayload($school)
+    public function processAllSchoolsForPG(Request $request)
     {
-        // Ensure the DB has a TID for tracking
-        if (empty($school->transaction_id)) {
-            $tid = "KGSTRIDT-" . Str::uuid()->toString();
+        $payment_ref_no = $request->payment_ref_no;
+        $payment_type   = $request->payment_type; // 'school' or 'district'
 
-            DB::table('grant_pilotschedule_one')
-                ->where('id', $school->id)
-                ->update(['transaction_id' => $tid]);
-
-            $school->transaction_id = $tid;
+        if (!$payment_ref_no || !$payment_type) {
+            return response()->json([
+                "status"  => false,
+                "message" => "payment_ref_no and payment_type are required."
+            ], 400);
         }
 
-        // Extract district name (e.g. "1011-Chisamba" → "Chisamba")
-        $districtName = trim(explode("-", $school->school_district)[1] ?? '');
+        // select correct table
+        if ($payment_type === 'school') {
+            $table = 'pg_school_fee_schedule';
+        } elseif ($payment_type === 'district') {
+            $table = 'pg_district_grant_schedule';
+        } else {
+            return response()->json([
+                "status" => false,
+                "message" => "Invalid payment type"
+            ], 400);
+        }
 
-        // Fetch district ID
-        $districtRow = DB::table('districts')->where('name', $districtName)->first();
-        $districtId  = $districtRow->id ?? 0;
+        $successCount = 0;
+        $failedCount  = 0;
+        $processed    = 0;
 
-        // Fetch bank details for district
-        $bank = DB::table('district_bank_accounts')
-            ->where('district_id', $districtId)
-            ->first();
+        while (true) {
 
-        // Build PG payload EXACTLY as required
+            // fetch next unsent record
+            $record = DB::table($table)
+                ->where('is_sent_to_pg', 0)
+                ->where('payment_ref_no', $payment_ref_no)
+                ->orderBy('id')
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    "status"    => true,
+                    "message"   => "Processing completed.",
+                    "processed" => $processed,
+                    "success"   => $successCount,
+                    "failed"    => $failedCount,
+                    "remaining" => DB::table($table)
+                        ->where('is_sent_to_pg', 0)
+                        ->where('payment_ref_no', $payment_ref_no)
+                        ->count()
+                ]);
+            }
+
+            // build payload
+            $payloadItem = $payment_type === 'school'
+                ? $this->buildSchoolPayload($record)
+                : $this->buildDistrictPayload($record);
+
+            $tid = $payloadItem["TransactionID"];
+            $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
+            $headers = $this->preparePGHeaders();
+
+            // log request
+            $logId = DB::table('pg_payment_logs')->insertGetId([
+                "payment_ref_no"   => $payment_ref_no,
+                "reference_id"     => $record->id,
+                "transaction_id"   => $tid,
+                "request_url"      => $url,
+                "request_payload"  => json_encode($payloadItem),
+                "headers"          => json_encode($headers),
+                "status"           => "pending",
+                "created_at"       => now(),
+                "updated_at"       => now()
+            ]);
+
+            $processed++;
+
+            try {
+
+                $client = new \GuzzleHttp\Client(['verify' => false]);
+
+                $response = $client->post($url, [
+                    'headers'     => $headers,
+                    'json'        => $payloadItem,
+                    'http_errors' => false
+                ]);
+
+                $status = $response->getStatusCode();
+                $body   = $response->getBody()->getContents();
+
+                // update log
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "http_status"   => $status,
+                        "response_body" => $body,
+                        "status"        => $status == 200 ? "success" : "failed",
+                        "updated_at"    => now()
+                    ]);
+
+                if ($status == 200) {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 1]);
+
+                    $successCount++;
+
+                } else {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 2]);
+
+                    $failedCount++;
+                }
+
+            } catch (\Exception $e) {
+
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "status"        => "error",
+                        "response_body" => $e->getMessage(),
+                        "updated_at"    => now()
+                    ]);
+
+                DB::table($table)
+                    ->where('id', $record->id)
+                    ->update(['is_sent_to_pg' => 2]);
+
+                $failedCount++;
+            }
+        }
+    }
+    private function buildSchoolPayload($row)
+    {
+        // generate transaction id if missing
+        if (empty($row->transaction_id)) {
+
+            $tid = "KGSTRIDT-" . Str::uuid()->toString();
+
+            DB::table('pg_school_fee_schedule')
+                ->where('id', $row->id)
+                ->update(['transaction_id' => $tid]);
+
+            $row->transaction_id = $tid;
+        }
+
         return [
-            "TransactionID"    => $school->transaction_id,
+            "TransactionID"    => $row->transaction_id,
             "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
+
             "RecipientID"      => Str::uuid()->toString(),
-            "RecipientType"    => "Beneficiary",
-            "Gender"           => "Female",
-            "FirstName"        => $school->school_emis ?? "0",
-            "LastName"         => $school->school_name ?? "0",
+            "RecipientType"    => "School",
+
+            // ✅ UPDATED
+            "FirstName"        => $row->code ?? "0",   // EMIS code
+            "LastName"         => $row->name ?? "0",   // school name
+
             "MobileNumber"     => "",
             "Language"         => "English",
             "LanguageCode"     => "eng",
             "Country"          => "ZM",
-            "PSP"              => "Zanaco",
-            "Province"         => $school->school_province ?? "0",
-            "District"         => $districtName,
+
+            "PSP"              => $row->bank_name ?? "ZANACO",
+
+            "Province"         => "0",
+            "District"         => $row->district_id ?? "0",
+
             "Ward"             => "0",
-            "CWAC"             => $school->cwac_name ?? "0",
-            "RegisteredTown"   => "0",
-            "DistrictID"       => $districtId,
+
+            "DistrictID"       => $row->district_id ?? 0,
             "WardID"           => 0,
-            "CWACID"           => $school->cwac_id ?? 0,
-            "HouseholdID"      => 0,
+
             "NRC"              => "999999/99/1",
             "DateOfBirth"      => "0",
-            "AccountNumber"    => $school->bank_account ?? "",
-            "AccountExtra"     => $school->bank_name ?? "ZANACO",
+
+            "AccountNumber"    => $row->bank_account ?? "",
+            "AccountExtra"     => $row->bank_name ?? "",
+
             "Currency"         => "ZMW",
-            "TransactionType"  => "Grant",
-            "Amount"           => floatval($school->grant_amount),
+            "TransactionType"  => "School Fees",
+
+            "Amount"           => floatval($row->fee_amount),
+
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
             "GPSLatitude"      => 0,
             "GPSLongitude"     => 0,
-            "PaymentReference" => "[UNDELIVERED][UNDELIVERED][UNDELIVERED]Manual payment",
-            "PaymentCycle"     => "KGS 2025 Term 2 Payment"
+
+            "PaymentReference" => $row->payment_ref_no,
+            "PaymentCycle"     => "KGS 2026 Term 1"
+        ];
+    }
+    private function buildDistrictPayload($row)
+    {
+        // generate transaction id if missing
+        if (empty($row->transaction_id)) {
+
+            $tid = "KGSTRIDT-" . Str::uuid()->toString();
+
+            DB::table('pg_district_grant_schedule')
+                ->where('id', $row->id)
+                ->update(['transaction_id' => $tid]);
+
+            $row->transaction_id = $tid;
+        }
+
+        return [
+            "TransactionID"    => $row->transaction_id,
+            "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
+
+            "RecipientID"      => Str::uuid()->toString(),
+            "RecipientType"    => "District",
+
+            // ✅ UPDATED
+            "FirstName"        => $row->code ?? "0",   // district code
+            "LastName"         => $row->name ?? "0",   // district name
+
+            "MobileNumber"     => "",
+            "Language"         => "English",
+            "LanguageCode"     => "eng",
+            "Country"          => "ZM",
+
+            "PSP"              => $row->bank_name ?? "ZANACO",
+
+            "Province"         => "0",
+            "District"         => $row->name ?? "0",
+
+            "Ward"             => "0",
+
+            "DistrictID"       => $row->district_id ?? 0,
+            "WardID"           => 0,
+
+            "NRC"              => "999999/99/1",
+            "DateOfBirth"      => "0",
+
+            "AccountNumber"    => $row->bank_account ?? "",
+            "AccountExtra"     => $row->bank_name ?? "",
+
+            "Currency"         => "ZMW",
+            "TransactionType"  => "Education Grant",
+
+            "Amount"           => floatval($row->grant_amount),
+
+            "GPSAccuracy"      => 0,
+            "GPSAltitude"      => 0,
+            "GPSLatitude"      => 0,
+            "GPSLongitude"     => 0,
+
+            "PaymentReference" => $row->payment_ref_no,
+            "PaymentCycle"     => "KGS 2026 Term 1"
         ];
     }
     public function getNextSchoolForPayment()
