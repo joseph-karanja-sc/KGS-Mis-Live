@@ -4197,7 +4197,7 @@ class MobileController extends Controller
                 "updated_at"       => now()
             ]);
 
-            dd(logId);
+            dd($logId);
 
             $processed++;
 
