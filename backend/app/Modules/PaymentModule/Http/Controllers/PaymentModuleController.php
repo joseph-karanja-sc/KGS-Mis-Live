@@ -4866,7 +4866,7 @@ class PaymentModuleController extends BaseController
             $year = $req->input('year');
             $qry = DB::table('payment_request_details as t1')
                 ->select(DB::raw("count(beneficiary_id) as no_of_beneficiaries, 
-                    t6.total_payable_fees as total_fees,
+                    SUM(t6.total_payable_fees) as total_fees,
                  t1.*, t1.id as payment_request_id,
                               st.name as approval_status_name,t2.id as prepared_by_id, CONCAT_WS(' ',decrypt(t2.first_name),
                               decrypt(t2.last_name)) as prepared_by,
@@ -6447,7 +6447,7 @@ class PaymentModuleController extends BaseController
     }
 
     
-    public function func_submitforpaymentApproval(Request $req)
+    public function func_submitforpaymentApprovalOld(Request $req)
     {
         $payment_request_id = $req->input('payment_request_id');
         $status_id = $req->input('status_id');
@@ -6467,6 +6467,83 @@ class PaymentModuleController extends BaseController
                 );
                 return response()->json($res);
             }
+            if (validateisNumeric($payment_request_id)) {
+                $where = array('id' => $payment_request_id);
+                $records = DB::table('beneficiary_payment_records')
+                    ->where(array('payment_request_id' => $payment_request_id))
+                    ->count();
+                if ($records > 0) {
+                    $data['updated_at'] = Carbon::now();
+                    $data['updated_by'] = $this->user_id;
+                    $previous_data = getPreviousRecords($table_name, $where);
+                    $success = updateRecord($table_name, $previous_data, $where, $data, $this->user_id);
+                    //save the record in the transitional table
+                    $previous_status_id = $previous_data[0]['status_id'];
+                    $table_name = 'payment_verificationtransitionsubmissions';
+                    //save the details in the transitional table
+                    $data = array(
+                        'payment_request_id' => $payment_request_id,
+                        'previous_status_id' => $previous_status_id,
+                        'next_status_id' => $status_id,
+                        'released_on' => Carbon::now(),
+                        'released_by' => $this->user_id
+                    );
+                    $data['created_at'] = Carbon::now();
+                    $data['created_by'] = $this->user_id;
+                    insertRecord($table_name, $data, $this->user_id);
+                } else {
+                    $res = array(
+                        'success' => false,
+                        'message' => 'Add Payment enrollment details to payment request!!'
+                    );
+                    return response()->json($res);
+                }
+            }
+            if ($success) {
+                $res = array(
+                    'success' => true,
+                    'message' => 'Payment Request Details submitted successfully for Payment Approval Process!!'
+                );
+            } else {
+                $res = array(
+                    'success' => false,
+                    'message' => 'Problem encountered while saving data. Try again later!!'
+                );
+
+            }
+        } catch (\Exception $exception) {
+            $res = array(
+                'success' => false,
+                'message' => $exception->getMessage()
+            );
+        } catch (\Throwable $throwable) {
+            $res = array(
+                'success' => false,
+                'message' => $throwable->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+    public function func_submitforpaymentApproval(Request $req) // 31st March 2026
+    {
+        $payment_request_id = $req->input('payment_request_id');
+        $status_id = $req->input('status_id');
+        $remark = $req->input('request_comment');
+        $data = array(
+            'status_id' => $status_id,
+            'request_comment' => $remark
+        );
+        $table_name = 'payment_request_details';
+        $success = false;
+        try {
+            // $duplicates_exist = checkEnrollmentDuplicates($payment_request_id);
+            // if ($duplicates_exist == true) {
+            //     $res = array(
+            //         'success' => false,
+            //         'message' => 'Duplicates found, please process duplicates before attempting this action!!'
+            //     );
+            //     return response()->json($res);
+            // }
             if (validateisNumeric($payment_request_id)) {
                 $where = array('id' => $payment_request_id);
                 $records = DB::table('beneficiary_payment_records')
