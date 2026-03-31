@@ -4927,9 +4927,9 @@ class MobileController extends Controller
             ->select(
                 't2.name as school_name',
                 't2.code as school_emis',
-                't1.bank_name as district_bank',
-                't1.bank_account as district_bank_account',
-                't1.sort_code as district_sort_code',
+                't1.bank_name as school_bank',
+                't1.bank_account as school_bank_account',
+                't1.sort_code as school_sort_code',
                 DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
                 DB::raw('SUM(t1.fee_amount) as total_amount')
             )
