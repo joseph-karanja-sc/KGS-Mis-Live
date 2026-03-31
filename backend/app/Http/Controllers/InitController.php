@@ -91,7 +91,8 @@ class InitController extends Controller
         $data['weekly_border_plus'] = $weekly_border_plus;
         $data['max_exam_fees'] = $max_exam_fees;
         $data['max_selection'] = 1200;//800; changed on 13th Jan 2020 consult Maureen/Frank
-        $data['max_selection_for_payment_request']=1500;//added by Job on 28/5/2022
+        // $data['max_selection_for_payment_request']=1500;//added by Job on 28/5/2022
+        $data['max_selection_for_payment_request']=5000;//added by Job on 28/5/2022
         $data['componentsArray'] = getAssignedComponents($user_id);
         $data['max_excel_upload'] = Config('constants.max_excel_upload');
         $data['version'] = new SemVer\Version('v3.0.0');
