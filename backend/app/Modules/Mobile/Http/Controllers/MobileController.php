@@ -4120,7 +4120,7 @@ class MobileController extends Controller
             }
         }
     }
-    public function processAllSchoolsForPG(Request $request)
+    public function processAllSchoolsForPG3(Request $request)
     {
         $payment_ref_no = $request->payment_ref_no;
         $payment_type   = $request->payment_type; // 'school' or 'district'
@@ -4272,6 +4272,180 @@ class MobileController extends Controller
                 $failedCount++;
             }
         }
+    }
+    public function processAllSchoolsForPG(Request $request)
+    {
+        $payment_ref_no = $request->payment_ref_no;
+        $payment_type   = $request->payment_type; // 'school' or 'district'
+
+        if (!$payment_ref_no || !$payment_type) {
+            return response()->json([
+                "status"  => false,
+                "message" => "payment_ref_no and payment_type are required."
+            ], 400);
+        }
+
+        // select correct table
+        if ($payment_type === 'school') {
+            $table = 'pg_school_fee_schedule';
+        } elseif ($payment_type === 'district') {
+            $table = 'pg_district_grant_schedule';
+        } else {
+            return response()->json([
+                "status" => false,
+                "message" => "Invalid payment type"
+            ], 400);
+        }
+
+        $successCount = 0;
+        $failedCount  = 0;
+        $processed    = 0;
+
+        $maxLoops = 500;
+        $loop = 0;
+
+        while ($loop < $maxLoops) {
+            $loop++;
+
+            // fetch next unsent record
+            $record = DB::table($table)
+                ->where('is_sent_to_pg', 0)
+                ->where('payment_ref_no', $payment_ref_no)
+                ->orderBy('id')
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    "status"    => true,
+                    "message"   => "Processing completed.",
+                    "processed" => $processed,
+                    "success"   => $successCount,
+                    "failed"    => $failedCount,
+                    "remaining" => DB::table($table)
+                        ->where('is_sent_to_pg', 0)
+                        ->where('payment_ref_no', $payment_ref_no)
+                        ->count()
+                ]);
+            }
+
+            // build payload
+            $payloadItem = $payment_type === 'school'
+                ? $this->buildSchoolPayload($record)
+                : $this->buildDistrictPayload($record);
+
+            $tid = $payloadItem["TransactionID"];
+            $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
+            $headers = $this->preparePGHeaders();
+
+            // insert log
+            try {
+
+                $logId = DB::table('pg_payment_logs')->insertGetId([
+                    "payment_ref_no"   => $payment_ref_no,
+                    "transaction_id"   => $tid,
+                    "payment_phase"    => property_exists($record, 'payment_phase') ? $record->payment_phase : 0,
+                    "request_url"      => $url,
+                    "request_payload"  => json_encode($payloadItem),
+                    "headers"          => json_encode($headers),
+                    "status"           => "pending",
+                    "created_at"       => now(),
+                    "updated_at"       => now()
+                ]);
+
+            } catch (\Throwable $e) {
+
+                \Log::error("PG LOG INSERT FAILED", [
+                    "error" => $e->getMessage()
+                ]);
+
+                return response()->json([
+                    "status" => false,
+                    "message" => "Failed to log PG request",
+                    "error" => $e->getMessage()
+                ]);
+            }
+
+            $processed++;
+
+            try {
+
+                $client = new \GuzzleHttp\Client([
+                    'verify' => false,
+                    'timeout' => 60
+                ]);
+
+                $response = $client->post($url, [
+                    'headers'     => $headers,
+                    'json'        => $payloadItem,
+                    'http_errors' => false
+                ]);
+
+                $status = $response->getStatusCode();
+                $body   = $response->getBody()->getContents();
+
+                // decode PG response
+                $responseJson = json_decode($body, true);
+
+                if (!$responseJson) {
+                    \Log::error("Invalid PG JSON response", ["body" => $body]);
+                }
+
+                $resultCode = $responseJson['ResultCode'] ?? null;
+
+                // ONLY success if ResultCode == 100
+                $isSuccess = ($resultCode == 100);
+
+                // update log
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "http_status"   => $status,
+                        "result_code"   => $resultCode,
+                        "response_body" => $body,
+                        "status"        => $isSuccess ? "success" : "failed",
+                        "updated_at"    => now()
+                    ]);
+
+                if ($isSuccess) {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 1]);
+
+                    $successCount++;
+
+                } else {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 2]);
+
+                    $failedCount++;
+                }
+
+            } catch (\Exception $e) {
+
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "status"        => "error",
+                        "response_body" => $e->getMessage(),
+                        "updated_at"    => now()
+                    ]);
+
+                DB::table($table)
+                    ->where('id', $record->id)
+                    ->update(['is_sent_to_pg' => 2]);
+
+                $failedCount++;
+            }
+        }
+
+        return response()->json([
+            "status"  => false,
+            "message" => "Loop limit reached, process incomplete.",
+            "processed" => $processed
+        ]);
     }
     private function buildSchoolPayload($row)
     {
@@ -4637,7 +4811,7 @@ class MobileController extends Controller
     }
 
     //transaction statuses
-    public function pgLogsList(Request $request)
+    public function pgLogsList1(Request $request)
     {
         $query = DB::table('pg_payment_logs as t')
             ->leftJoin('school_information as s', 's.id', '=', 't.school_id')
@@ -4648,6 +4822,7 @@ class MobileController extends Controller
                 't.payment_phase',
                 't.school_id',
                 's.name as school_name',
+                't.result_code',
                 't.http_status',
                 't.status as pg_status',
                 't.created_at'
@@ -4698,6 +4873,71 @@ class MobileController extends Controller
             "status" => true,
             "count" => $rows->total(),
             "data" => $rows
+        ]);
+    }
+    public function pgLogsList(Request $request)
+    {
+        $query = DB::table('pg_payment_logs as t')
+            ->leftJoin('school_information as s', 's.id', '=', 't.school_id')
+            ->select(
+                't.id',
+                't.transaction_id',
+                't.payment_ref_no',
+                't.payment_phase',
+                't.school_id',
+                's.name as school_name',
+                't.result_code',
+                't.http_status',
+                't.status as pg_status',
+                't.created_at'
+            );
+
+        if ($request->payment_ref_no) {
+            $query->where('t.payment_ref_no', $request->payment_ref_no);
+        }
+
+        if ($request->payment_phase) {
+            $query->where('t.payment_phase', $request->payment_phase);
+        }
+
+        if ($request->school_id) {
+            $query->where('t.school_id', $request->school_id);
+        }
+
+        if ($request->status) {
+            $query->where('t.status', $request->status);
+        }
+
+        if ($request->from_date) {
+            $query->whereDate('t.created_at', '>=', $request->from_date);
+        }
+
+        if ($request->to_date) {
+            $query->whereDate('t.created_at', '<=', $request->to_date);
+        }
+
+        if ($request->search) {
+            $search = '%'.$request->search.'%';
+            $query->where(function ($q) use ($search) {
+                $q->where('t.transaction_id', 'like', $search)
+                ->orWhere('s.name', 'like', $search);
+            });
+        }
+
+        $query->orderBy('t.created_at', 'desc');
+
+        $rows = $query->paginate(50);
+
+        return response()->json([
+            "status" => true,
+            "count"  => $rows->total(),
+            "data"   => $rows->items(),
+            "pagination" => [
+                "current_page" => $rows->currentPage(),
+                "last_page"    => $rows->lastPage(),
+                "next_page"    => $rows->nextPageUrl(),
+                "prev_page"    => $rows->previousPageUrl()
+            ]
         ]);
     }
     public function pgLogsDetails($transaction_id)
