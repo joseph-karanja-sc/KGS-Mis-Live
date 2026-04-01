@@ -5280,7 +5280,7 @@ class MobileController extends Controller
                 ])
 
                 ->orderByDesc('t1.id')
-                ->paginate(50); // better than LIMIT
+                ->paginate(100); // better than LIMIT
 
             return response()->json([
                 'status' => 'success',
