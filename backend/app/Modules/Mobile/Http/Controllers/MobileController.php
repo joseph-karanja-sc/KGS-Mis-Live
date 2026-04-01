@@ -4858,6 +4858,8 @@ class MobileController extends Controller
             // build payload
             $payloadItem = $this->buildDistrictPayload($record);
 
+            dd($payloadItem);
+
             $tid = $payloadItem["TransactionID"];
             $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
             $headers = $this->preparePGHeaders();
