@@ -4810,6 +4810,153 @@ class MobileController extends Controller
         }
     }
 
+    public function retrySingleDistrictPayment(Request $request)
+    {
+        try {
+
+            $transaction_id = $request->transaction_id;
+
+            if (!$transaction_id) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "transaction_id is required"
+                ], 400);
+            }
+
+            // get record from schedule
+            $record = DB::table('pg_district_grant_schedule')
+                ->where('transaction_id', $transaction_id)
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "Record not found"
+                ], 404);
+            }
+
+            // prevent retry if already successful
+            if ((int)$record->is_sent_to_pg === 1) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "Payment already successful, cannot retry"
+                ], 400);
+            }
+
+            // 🔥 ALWAYS generate NEW transaction id for retry
+            $newTransactionId = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
+
+            DB::table('pg_district_grant_schedule')
+                ->where('id', $record->id)
+                ->update([
+                    'transaction_id' => $newTransactionId
+                ]);
+
+            // update local object so payload uses new ID
+            $record->transaction_id = $newTransactionId;
+
+            // build payload
+            $payloadItem = $this->buildDistrictPayload($record);
+
+            $tid = $payloadItem["TransactionID"];
+            $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
+            $headers = $this->preparePGHeaders();
+
+            // insert log
+            $logId = DB::table('pg_payment_logs')->insertGetId([
+                "payment_ref_no"   => $record->payment_ref_no,
+                "transaction_id"   => $tid,
+                "payment_phase"    => 0,
+                "request_url"      => $url,
+                "request_payload"  => json_encode($payloadItem),
+                "headers"          => json_encode($headers),
+                "status"           => "pending",
+                "created_at"       => now(),
+                "updated_at"       => now()
+            ]);
+
+            try {
+
+                $client = new \GuzzleHttp\Client([
+                    'verify' => false,
+                    'timeout' => 60
+                ]);
+
+                $response = $client->post($url, [
+                    'headers'     => $headers,
+                    'json'        => $payloadItem,
+                    'http_errors' => false
+                ]);
+
+                $httpStatus = $response->getStatusCode();
+                $body       = $response->getBody()->getContents();
+
+                $responseJson = json_decode($body, true);
+                $resultCode   = $responseJson['ResultCode'] ?? null;
+
+                $isSuccess = ($resultCode == 100);
+
+                // update log
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "http_status"   => $httpStatus,
+                        "result_code"   => $resultCode,
+                        "response_body" => $body,
+                        "status"        => $isSuccess ? "success" : "failed",
+                        "updated_at"    => now()
+                    ]);
+
+                // update schedule status only (transaction_id already updated)
+                DB::table('pg_district_grant_schedule')
+                    ->where('id', $record->id)
+                    ->update([
+                        'is_sent_to_pg' => $isSuccess ? 1 : 2
+                    ]);
+
+                return response()->json([
+                    "status" => true,
+                    "message" => $isSuccess ? "Payment successful" : "Payment failed",
+                    "pg_response" => $responseJson
+                ]);
+
+            } catch (\Exception $e) {
+
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "status"        => "error",
+                        "response_body" => $e->getMessage(),
+                        "updated_at"    => now()
+                    ]);
+
+                DB::table('pg_district_grant_schedule')
+                    ->where('id', $record->id)
+                    ->update([
+                        'is_sent_to_pg' => 2
+                    ]);
+
+                return response()->json([
+                    "status" => false,
+                    "message" => "Retry failed",
+                    "error" => $e->getMessage()
+                ], 500);
+            }
+
+        } catch (\Throwable $e) {
+
+            \Log::error("Retry single payment error", [
+                "error" => $e->getMessage()
+            ]);
+
+            return response()->json([
+                "status" => false,
+                "message" => "Unexpected error",
+                "error" => $e->getMessage()
+            ], 500);
+        }
+    }
+
     //transaction statuses
     public function pgLogsList1(Request $request)
     {
