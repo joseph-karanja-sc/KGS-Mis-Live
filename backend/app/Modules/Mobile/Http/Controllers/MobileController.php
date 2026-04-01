@@ -4278,7 +4278,7 @@ class MobileController extends Controller
         // generate transaction id if missing
         if (empty($row->transaction_id)) {
 
-            $tid = "KGSTRIDT-" . Str::uuid()->toString();
+            $tid = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
 
             DB::table('pg_school_fee_schedule')
                 ->where('id', $row->id)
@@ -4287,22 +4287,30 @@ class MobileController extends Controller
             $row->transaction_id = $tid;
         }
 
-        // ✅ join school_information
+        // get school details
         $school = DB::table('school_information')
             ->where('id', $row->school_id)
             ->select('code', 'name')
             ->first();
 
+        // safe handling (prevents crashes)
+        $schoolCode = $school->code ?? 'UNKNOWN';
+        $schoolName = $school->name ?? 'UNKNOWN';
+
+        // build payment cycle string
+        $paymentCycle = "KGS 2026 Term 1, {$schoolCode} - {$schoolName}";
+
         return [
+
             "TransactionID"    => $row->transaction_id,
             "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
 
-            "RecipientID"      => Str::uuid()->toString(),
+            "RecipientID"      => \Illuminate\Support\Str::uuid()->toString(),
             "RecipientType"    => "Beneficiary",
 
-            // ✅ FIXED
-            "FirstName"        => $school->code ?? "0",   // EMIS
-            "LastName"         => $school->name ?? "0",   // school name
+            // using school info
+            "FirstName"        => $schoolCode,   // EMIS
+            "LastName"         => $schoolName,   // school name
 
             "MobileNumber"     => "",
             "Language"         => "English",
@@ -4328,7 +4336,7 @@ class MobileController extends Controller
             "Currency"         => "ZMW",
             "TransactionType"  => "School Fees",
 
-            "Amount"           => floatval($row->fee_amount),
+            "Amount"           => floatval($row->fee_amount_test),
 
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
@@ -4336,7 +4344,9 @@ class MobileController extends Controller
             "GPSLongitude"     => 0,
 
             "PaymentReference" => $row->payment_ref_no,
-            "PaymentCycle"     => "KGS 2026 Term 1"
+
+            // final safe field
+            "PaymentCycle"     => $paymentCycle
         ];
     }
     private function buildDistrictPayload($row)
@@ -4344,31 +4354,39 @@ class MobileController extends Controller
         // generate transaction id if missing
         if (empty($row->transaction_id)) {
 
-            $tid = "KGSTRIDT-" . Str::uuid()->toString();
+            $tid = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
 
             DB::table('pg_district_grant_schedule')
-                ->where('id', $row->id) // ✅ FIXED
+                ->where('id', $row->id)
                 ->update(['transaction_id' => $tid]);
 
             $row->transaction_id = $tid;
         }
 
-        // ✅ fetch district info
+        // fetch district info
         $district = DB::table('districts')
             ->where('id', $row->district_id)
             ->select('code', 'name')
             ->first();
 
+        // safe handling (prevents crashes)
+        $districtCode = $district->code ?? 'UNKNOWN';
+        $districtName = $district->name ?? 'UNKNOWN';
+
+        // build payment cycle string
+        $paymentCycle = "KGS 2026 Term 1, {$districtCode} - {$districtName}";
+
         return [
+
             "TransactionID"    => $row->transaction_id,
             "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
 
-            "RecipientID"      => Str::uuid()->toString(),
+            "RecipientID"      => \Illuminate\Support\Str::uuid()->toString(),
             "RecipientType"    => "Beneficiary",
 
-            // ✅ FIXED
-            "FirstName"        => $district->code ?? "0",
-            "LastName"         => $district->name ?? "0",
+            // using district info
+            "FirstName"        => $districtCode,
+            "LastName"         => $districtName,
 
             "MobileNumber"     => "",
             "Language"         => "English",
@@ -4378,7 +4396,7 @@ class MobileController extends Controller
             "PSP"              => $row->bank_name ?? "ZANACO",
 
             "Province"         => "0",
-            "District"         => $district->name ?? "0",
+            "District"         => $districtName,
 
             "Ward"             => "0",
 
@@ -4394,7 +4412,6 @@ class MobileController extends Controller
             "Currency"         => "ZMW",
             "TransactionType"  => "Education Grant",
 
-            // ✅ FIXED (important!)
             "Amount"           => floatval($row->grant_amount_test),
 
             "GPSAccuracy"      => 0,
@@ -4403,7 +4420,9 @@ class MobileController extends Controller
             "GPSLongitude"     => 0,
 
             "PaymentReference" => $row->payment_ref_no,
-            "PaymentCycle"     => "KGS 2026 Term 1"
+
+            // final safe field
+            "PaymentCycle"     => $paymentCycle
         ];
     }
     public function getNextSchoolForPayment()
