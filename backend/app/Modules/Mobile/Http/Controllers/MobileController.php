@@ -4586,7 +4586,7 @@ class MobileController extends Controller
             "Currency"         => "ZMW",
             "TransactionType"  => "Education Grant",
 
-            "Amount"           => floatval($row->grant_amount_test),
+            "Amount"           => floatval($row->grant_amount),
 
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
