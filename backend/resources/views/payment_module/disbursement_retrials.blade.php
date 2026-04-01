@@ -257,7 +257,11 @@ function loadFailedPayments() {
                     <td class="number-col">${row.grant_amount ?? 0}</td>
                     <td>${row.transaction_id}</td>
                     <td class="number-col">${row.result_code ?? ''}</td>
-                    <td><span class="desc-badge">${row.result_details ?? ''}</span></td>
+                    <td title="${row.result_details ?? ''}">
+                        <span class="desc-badge">
+                            ${(row.result_details ?? '').substring(0, 80)}...
+                        </span>
+                    </td>
                     <td>
                         <span class="status-badge ${row.status === 'failed' ? 'status-failed' : 'status-success'}">
                             ${row.status}
