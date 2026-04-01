@@ -4317,7 +4317,7 @@ class MobileController extends Controller
             "LanguageCode"     => "eng",
             "Country"          => "ZM",
 
-            "PSP"              => $row->bank_name ?? "ZANACO",
+            "PSP"              => "ZANACO",
 
             "Province"         => "0",
             "District"         => $row->district_id ?? "0",
@@ -4393,7 +4393,7 @@ class MobileController extends Controller
             "LanguageCode"     => "eng",
             "Country"          => "ZM",
 
-            "PSP"              => $row->bank_name ?? "ZANACO",
+            "PSP"              => "ZANACO",
 
             "Province"         => "0",
             "District"         => $districtName,
