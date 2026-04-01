@@ -75,12 +75,12 @@ tr:nth-child(even) {
 .number-col { text-align: center; }
 
 .desc-badge {
-    background: #fff5f5;
+    background: none;
+    border: none;
+    padding: 0;
     color: #c62828;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    border: 1px solid #ffd6d6;
+    font-size: 13px;
+    line-height: 1.4;
 }
 
 .status-badge {
