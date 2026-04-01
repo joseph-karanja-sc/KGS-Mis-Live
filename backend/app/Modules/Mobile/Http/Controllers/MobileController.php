@@ -4525,7 +4525,7 @@ class MobileController extends Controller
     }
     private function buildDistrictPayload($row)
     {
-        // generate transaction id if missing
+        // generate transaction id if missing (safety, though retry already handles this)
         if (empty($row->transaction_id)) {
 
             $tid = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
@@ -4543,12 +4543,21 @@ class MobileController extends Controller
             ->select('code', 'name')
             ->first();
 
-        // safe handling (prevents crashes)
+        // safe handling
         $districtCode = $district->code ?? 'UNKNOWN';
         $districtName = $district->name ?? 'UNKNOWN';
 
-        // build payment cycle string
-        $paymentCycle = "KGS 2026 Term 1, {$districtCode} - {$districtName}";
+        // dynamic term + year
+        $term = $row->term ?? 1;
+        $year = $row->year ?? date('Y');
+
+        $paymentCycle = "Term {$term} {$year}";
+
+        // format amount
+        $amount = number_format($row->grant_amount ?? 0, 2);
+
+        // ✅ user-facing message (SMS / notification)
+        $paymentReference = "KGS Grant ZMW {$amount} sent to {$districtName} ({$paymentCycle})";
 
         return [
 
@@ -4586,17 +4595,18 @@ class MobileController extends Controller
             "Currency"         => "ZMW",
             "TransactionType"  => "Education Grant",
 
-            "Amount"           => floatval($row->grant_amount),
+            "Amount"           => floatval($row->grant_amount ?? 0),
 
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
             "GPSLatitude"      => 0,
             "GPSLongitude"     => 0,
 
-            "PaymentReference" => $row->payment_ref_no,
+            // ✅ improved message
+            "PaymentReference" => $paymentReference,
 
-            // final safe field
-            "PaymentCycle"     => $paymentCycle
+            // keep for system tracking
+            "PaymentCycle"     => "KGS {$paymentCycle}, {$districtCode} - {$districtName}"
         ];
     }
     public function getNextSchoolForPayment()
@@ -4857,8 +4867,6 @@ class MobileController extends Controller
 
             // build payload
             $payloadItem = $this->buildDistrictPayload($record);
-
-            dd($payloadItem);
 
             $tid = $payloadItem["TransactionID"];
             $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";

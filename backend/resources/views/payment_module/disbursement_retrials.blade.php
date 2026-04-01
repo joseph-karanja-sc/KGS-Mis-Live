@@ -14,23 +14,19 @@ body {
     margin: 0;
 }
 
-/* HEADER */
 .header {
     background: #1b5e20;
     color: white;
     padding: 16px 25px;
     font-size: 20px;
     font-weight: 600;
-    letter-spacing: 0.3px;
 }
 
-/* CONTAINER */
 .container {
     width: 96%;
     margin: 20px auto;
 }
 
-/* CARD */
 .card {
     background: white;
     padding: 18px;
@@ -38,7 +34,6 @@ body {
     box-shadow: 0 3px 12px rgba(0,0,0,0.05);
 }
 
-/* STATES */
 .loading-text, .empty-text {
     text-align: center;
     font-size: 15px;
@@ -46,11 +41,8 @@ body {
     display: none;
 }
 
-.empty-text {
-    color: #c62828;
-}
+.empty-text { color: #c62828; }
 
-/* TABLE */
 .table-wrapper {
     overflow-x: auto;
 }
@@ -61,53 +53,40 @@ table {
     margin-top: 10px;
 }
 
-/* HEADER */
 th {
     background: #f8f9fb;
     font-weight: 600;
     font-size: 13px;
-    color: #444;
     padding: 12px;
-    border-bottom: 1px solid #eee;
     position: sticky;
     top: 0;
 }
 
-/* ROWS */
 td {
     padding: 12px;
     font-size: 13px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #eee;
 }
 
-/* zebra effect */
 tr:nth-child(even) {
     background: #fafafa;
 }
 
-/* NUMBER ALIGN */
-.number-col {
-    text-align: center;
-}
+.number-col { text-align: center; }
 
-/* BADGE */
 .desc-badge {
     background: #fff5f5;
     color: #c62828;
     padding: 6px 10px;
     border-radius: 6px;
     font-size: 12px;
-    display: inline-block;
     border: 1px solid #ffd6d6;
-    max-width: 300px;
 }
 
-/* STATUS */
 .status-badge {
     padding: 5px 10px;
     border-radius: 6px;
     font-size: 12px;
-    font-weight: 500;
 }
 
 .status-failed {
@@ -120,7 +99,6 @@ tr:nth-child(even) {
     color: #1b5e20;
 }
 
-/* BUTTON */
 .retry-btn {
     background: #1b5e20;
     color: white;
@@ -128,20 +106,23 @@ tr:nth-child(even) {
     padding: 6px 12px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 12px;
-    transition: 0.2s;
-}
-
-.retry-btn:hover {
-    background: #144a19;
 }
 
 .retry-btn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
 }
 
-/* MODAL */
+/* refresh button */
+.refresh-btn {
+    background:#1976d2;
+    color:white;
+    border:none;
+    padding:7px 14px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+/* modal */
 #confirmModal {
     display:none;
     position:fixed;
@@ -158,7 +139,6 @@ tr:nth-child(even) {
     width:350px;
     border-radius:10px;
     text-align:center;
-    box-shadow:0 5px 20px rgba(0,0,0,0.15);
 }
 
 .modal-actions {
@@ -167,17 +147,9 @@ tr:nth-child(even) {
     justify-content:space-between;
 }
 
-.modal-actions button {
-    padding:8px 14px;
-    border:none;
-    border-radius:6px;
-    cursor:pointer;
-}
-
 .cancel-btn { background:#777; color:white; }
 .confirm-btn { background:#1b5e20; color:white; }
 
-/* TOAST */
 .toast {
     position: fixed;
     top: 20px;
@@ -187,7 +159,6 @@ tr:nth-child(even) {
     border-radius: 8px;
     color: white;
     z-index: 9999;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
 }
 
 .toast-success { background: #1b5e20; }
@@ -202,6 +173,10 @@ tr:nth-child(even) {
 
 <div class="container">
 <div class="card">
+
+<div style="display:flex; justify-content:flex-end;">
+    <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
+</div>
 
 <div id="loading" class="loading-text">Fetching failed payments...</div>
 <div id="empty" class="empty-text">No failed payments found.</div>
@@ -231,7 +206,7 @@ tr:nth-child(even) {
 </div>
 </div>
 
-<!-- MODAL -->
+<!-- modal -->
 <div id="confirmModal">
 <div class="modal-box">
 <h3>Confirm Retry</h3>
@@ -247,8 +222,13 @@ tr:nth-child(even) {
 
 let retryData = null;
 
-// FETCH DATA
-window.addEventListener("DOMContentLoaded", () => {
+// load data
+window.addEventListener("DOMContentLoaded", loadFailedPayments);
+
+function loadFailedPayments() {
+
+    const tbody = document.getElementById("failedBody");
+    tbody.innerHTML = "";
 
     fetch("/api/zispis/v1/pg/failed-payments")
         .then(res => res.json())
@@ -290,19 +270,18 @@ window.addEventListener("DOMContentLoaded", () => {
                     </td>
                 `;
 
-                document.getElementById("failedBody").appendChild(tr);
+                tbody.appendChild(tr);
             });
 
         });
+}
 
-    document.getElementById("confirmRetryBtn").addEventListener("click", () => {
-        if (!retryData) return;
-        closeRetryModal();
-        retryPayment(retryData.transaction_id, retryData.btn);
-    });
-});
+// refresh button
+function refreshData() {
+    loadFailedPayments();
+}
 
-// MODAL
+// modal
 function openRetryConfirm(transaction_id, btn) {
     retryData = { transaction_id, btn };
     document.getElementById("confirmModal").style.display = "flex";
@@ -312,7 +291,7 @@ function closeRetryModal() {
     document.getElementById("confirmModal").style.display = "none";
 }
 
-// RETRY
+// retry
 function retryPayment(transaction_id, btn) {
 
     btn.disabled = true;
@@ -332,7 +311,7 @@ function retryPayment(transaction_id, btn) {
         if (data.status === true && pg?.ResultCode === 100) {
 
             showToast("success", message, pg?.ResultDetails);
-            setTimeout(() => location.reload(), 1500);
+            setTimeout(() => loadFailedPayments(), 1500);
 
         } else {
 
@@ -349,7 +328,14 @@ function retryPayment(transaction_id, btn) {
     });
 }
 
-// TOAST
+// confirm button
+document.getElementById("confirmRetryBtn").addEventListener("click", () => {
+    if (!retryData) return;
+    closeRetryModal();
+    retryPayment(retryData.transaction_id, retryData.btn);
+});
+
+// toast
 function showToast(type, title, message) {
 
     const box = document.createElement("div");
