@@ -4298,7 +4298,7 @@ class MobileController extends Controller
             "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
 
             "RecipientID"      => Str::uuid()->toString(),
-            "RecipientType"    => "School",
+            "RecipientType"    => "Beneficiary",
 
             // ✅ FIXED
             "FirstName"        => $school->code ?? "0",   // EMIS
@@ -4364,7 +4364,7 @@ class MobileController extends Controller
             "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
 
             "RecipientID"      => Str::uuid()->toString(),
-            "RecipientType"    => "District",
+            "RecipientType"    => "Beneficiary",
 
             // ✅ FIXED
             "FirstName"        => $district->code ?? "0",
