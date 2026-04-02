@@ -4,92 +4,165 @@
 <meta charset="UTF-8">
 <title>Disbursement Re-trials</title>
 
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
 <style>
-    body {
-        font-family: "Inter", sans-serif;
-        background: #f5f7fa;
-        margin: 0;
-    }
 
-    .header {
-        background: #1b5e20;
-        color: white;
-        padding: 15px 20px;
-        font-size: 22px;
-        font-weight: 600;
-    }
+body {
+    font-family: "Inter", sans-serif;
+    background: #f4f6f9;
+    margin: 0;
+}
 
-    .container {
-        width: 95%;
-        margin: 10px auto;
-        padding: 20px;
-    }
+.header {
+    background: #1b5e20;
+    color: white;
+    padding: 16px 25px;
+    font-size: 20px;
+    font-weight: 600;
+}
 
-    .card {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.06);
-    }
+.container {
+    width: 96%;
+    margin: 20px auto;
+}
 
-    .loading-text, .empty-text {
-        text-align: center;
-        font-size: 18px;
-        margin-top: 20px;
-        display: none;
-    }
+.card {
+    background: white;
+    padding: 18px;
+    border-radius: 10px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+}
 
-    .empty-text {
-        color: #b30000;
-    }
+.loading-text, .empty-text {
+    text-align: center;
+    font-size: 15px;
+    margin: 20px 0;
+    display: none;
+}
 
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 15px;
-    }
+.empty-text { color: #c62828; }
 
-    th, td {
-        padding: 12px 10px;
-        border-bottom: 1px solid #eee;
-        text-align: left;
-        font-size: 14px;
-    }
+.table-wrapper {
+    overflow-x: auto;
+}
 
-    th {
-        background: #f0f0f0;
-        font-weight: 600;
-    }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
 
-    .retry-btn {
-        background: #1b5e20;
-        color: white;
-        border: none;
-        padding: 8px 12px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 13px;
-        transition: 0.2s;
-    }
+th {
+    background: #f8f9fb;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 12px;
+    position: sticky;
+    top: 0;
+}
 
-    .retry-btn:hover {
-        background: #144a19;
-    }
+td {
+    padding: 12px;
+    font-size: 13px;
+    border-bottom: 1px solid #eee;
+}
 
-    .desc-badge {
-        background: #ffebee; 
-        color: #c62828;
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        display: inline-block;
-        border: 1px solid #ffcdd2;
-    }
+tr:nth-child(even) {
+    background: #fafafa;
+}
 
-    td.number-col, th.number-col {
-        text-align: center !important;
-    }
+.number-col { text-align: center; }
 
+.desc-badge {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #c62828;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.status-badge {
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.status-failed {
+    background: #ffe5e5;
+    color: #c62828;
+}
+
+.status-success {
+    background: #e8f5e9;
+    color: #1b5e20;
+}
+
+.retry-btn {
+    background: #1b5e20;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.retry-btn:disabled {
+    opacity: 0.5;
+}
+
+/* refresh button */
+.refresh-btn {
+    background:#1976d2;
+    color:white;
+    border:none;
+    padding:7px 14px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+/* modal */
+#confirmModal {
+    display:none;
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.4);
+    z-index:9999;
+    align-items:center;
+    justify-content:center;
+}
+
+.modal-box {
+    background:white;
+    padding:25px;
+    width:350px;
+    border-radius:10px;
+    text-align:center;
+}
+
+.modal-actions {
+    margin-top:20px;
+    display:flex;
+    justify-content:space-between;
+}
+
+.cancel-btn { background:#777; color:white; }
+.confirm-btn { background:#1b5e20; color:white; }
+
+.toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 20px;
+    border-radius: 8px;
+    color: white;
+    z-index: 9999;
+}
+
+.toast-success { background: #1b5e20; }
+.toast-error { background: #c62828; }
 
 </style>
 </head>
@@ -99,110 +172,103 @@
 <div class="header">Disbursement Re-trials</div>
 
 <div class="container">
-    <div class="card">
+<div class="card">
 
-        <div id="loading" class="loading-text">Fetching failed payments...</div>
-        <div id="empty" class="empty-text">No failed payments found.</div>
-
-        <table id="failedTable" style="display:none;">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>School</th>
-                    <th>District</th>                    
-                    <th class="number-col">Phase</th>
-                    <th>Ref No</th>
-                    <th class="number-col">Total Amount(Kwacha)</th>
-                    <th>Transaction ID</th>
-                    <th class="number-col">Code</th>
-                    <th>Description</th>
-                    <th>Timestamp</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="failedBody"></tbody>
-        </table>
-
-    </div>
+<div style="display:flex; justify-content:flex-end;">
+    <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
 </div>
 
-<!-- ============================
-     CONFIRMATION MODAL
-============================ -->
-<div id="confirmModal" 
-     style="display:none; position:fixed; top:0; left:0; right:0; bottom:0;
-            background:rgba(0,0,0,0.4); z-index:9999;
-            align-items:center; justify-content:center;">
+<div id="loading" class="loading-text">Fetching failed payments...</div>
+<div id="empty" class="empty-text">No failed payments found.</div>
 
-    <div style="background:white; padding:25px; width:350px; border-radius:8px;
-                box-shadow:0 4px 12px rgba(0,0,0,0.15); text-align:center;">
-
-        <h3 style="margin-top:0; font-size:18px;">Confirm Retry?</h3>
-        <p style="margin-top:10px; font-size:14px;">Are you sure you want to retry this payment?</p>
-
-        <div style="margin-top:20px; display:flex; justify-content:space-between;">
-            <button onclick="closeRetryModal()" 
-                    style="padding:8px 14px; background:#777; color:white; border:none; border-radius:5px;">
-                Cancel
-            </button>
-
-            <button id="confirmRetryBtn"
-                    style="padding:8px 14px; background:#1b5e20; color:white; border:none; border-radius:5px;">
-                Retry Payment
-            </button>
-        </div>
-
-    </div>
+<div class="table-wrapper">
+<table id="failedTable" style="display:none;">
+<thead>
+<tr>
+<th>#</th>
+<th>District</th>
+<th>Bank</th>
+<th>Account</th>
+<th>Branch</th>
+<th>Sort Code</th>
+<th class="number-col">Amount</th>
+<th>Transaction ID</th>
+<th class="number-col">Code</th>
+<th>Description</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="failedBody"></tbody>
+</table>
 </div>
 
+</div>
+</div>
+
+<!-- modal -->
+<div id="confirmModal">
+<div class="modal-box">
+<h3>Confirm Retry</h3>
+<p>Are you sure you want to retry this payment?</p>
+<div class="modal-actions">
+<button class="cancel-btn" onclick="closeRetryModal()">Cancel</button>
+<button id="confirmRetryBtn" class="confirm-btn">Retry</button>
+</div>
+</div>
+</div>
 
 <script>
+
 let retryData = null;
 
-// ==================================
-// FETCH FAILED RECORDS
-// ==================================
-document.addEventListener("DOMContentLoaded", function () {
+// load data
+window.addEventListener("DOMContentLoaded", loadFailedPayments);
 
-    const apiUrl = "/api/zispis/v1/pg/failed-payments";
-    const loading = document.getElementById("loading");
-    const emptyMsg = document.getElementById("empty");
-    const table = document.getElementById("failedTable");
+function loadFailedPayments() {
+
     const tbody = document.getElementById("failedBody");
+    tbody.innerHTML = "";
 
-    loading.style.display = "block";
-
-    fetch(apiUrl)
+    fetch("/api/zispis/v1/pg/failed-payments")
         .then(res => res.json())
         .then(data => {
-            loading.style.display = "none";
 
-            if (!data.data || data.data.data.length === 0) {
-                emptyMsg.style.display = "block";
+            const rows = data.data?.data || [];
+
+            if (!rows.length) {
+                document.getElementById("empty").style.display = "block";
                 return;
             }
 
-            table.style.display = "table";
+            document.getElementById("failedTable").style.display = "table";
 
-            data.data.data.forEach((row, index) => {
-                let tr = document.createElement("tr");
+            rows.forEach((row, index) => {
+
+                const tr = document.createElement("tr");
 
                 tr.innerHTML = `
                     <td>${index + 1}</td>
-                    <td>${row.school_name ?? ''}</td>
                     <td>${row.district_name ?? ''}</td>
-                    <td class="number-col">${row.payment_phase}</td>
-                    <td>${row.payment_ref_no}</td>
-                    <td class="number-col">${row.grant_amount}</td>
+                    <td>${row.district_bank_name ?? ''}</td>
+                    <td>${row.district_bank_account ?? ''}</td>
+                    <td>${row.district_branch ?? ''}</td>
+                    <td>${row.district_sort_code ?? ''}</td>
+                    <td class="number-col">${row.grant_amount ?? 0}</td>
                     <td>${row.transaction_id}</td>
-                    <td class="number-col">${row.result_code}</td>
-                    <td>
-                        <span class="desc-badge">${row.result_description ?? ''}</span>
+                    <td class="number-col">${row.result_code ?? ''}</td>
+                    <td title="${row.result_details ?? ''}">
+                        <span class="desc-badge">
+                            ${(row.result_details ?? '').substring(0, 80)}...
+                        </span>
                     </td>
-                    <td>${row.created_at}</td>
                     <td>
-                        <button class="retry-btn"
-                            onclick="openRetryConfirm('${row.school_id}', '${row.payment_ref_no}', '${row.payment_phase}', this)">
+                        <span class="status-badge ${row.status === 'failed' ? 'status-failed' : 'status-success'}">
+                            ${row.status}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="retry-btn" onclick="openRetryConfirm('${row.transaction_id}', this)">
                             Retry
                         </button>
                     </td>
@@ -211,34 +277,17 @@ document.addEventListener("DOMContentLoaded", function () {
                 tbody.appendChild(tr);
             });
 
-
-        })
-        .catch(err => {
-            loading.innerText = "Error fetching data.";
-            showToast("error", "Error Loading Data", err.message);
         });
+}
 
+// refresh button
+function refreshData() {
+    loadFailedPayments();
+}
 
-    // Assign retry action
-    document.getElementById("confirmRetryBtn").addEventListener("click", function () {
-        if (!retryData) return;
-        closeRetryModal();
-
-        retryPayment(
-            retryData.school_id,
-            retryData.payment_ref_no,
-            retryData.payment_phase,
-            retryData.btn
-        );
-    });
-});
-
-
-// ===============================
-// OPEN & CLOSE MODAL
-// ===============================
-function openRetryConfirm(school_id, payment_ref_no, payment_phase, btn) {
-    retryData = { school_id, payment_ref_no, payment_phase, btn };
+// modal
+function openRetryConfirm(transaction_id, btn) {
+    retryData = { transaction_id, btn };
     document.getElementById("confirmModal").style.display = "flex";
 }
 
@@ -246,125 +295,63 @@ function closeRetryModal() {
     document.getElementById("confirmModal").style.display = "none";
 }
 
+// retry
+function retryPayment(transaction_id, btn) {
 
+    btn.disabled = true;
+    btn.innerText = "Retrying...";
 
-// ===============================
-// REAL RETRY PAYMENT (API)
-// ===============================
-function retryPayment(school_id, payment_ref_no, payment_phase, btnElement) {
-
-    if (btnElement) {
-        btnElement.disabled = true;
-        btnElement.innerText = "Retrying...";
-        btnElement.style.opacity = "0.7";
-    }
-
-    fetch("/api/zispis/v1/pg/retry-one-payment", {
+    fetch("/api/zispis/v1/pg/retry-one-payment-district", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        },
-        body: JSON.stringify({
-            school_id,
-            payment_ref_no,
-            payment_phase
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction_id })
     })
-    .then(async res => {
-
-        // Handle API-level errors (404, 500, etc.)
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error("API Error: " + text);
-        }
-
-        return res.json();
-    })
+    .then(res => res.json())
     .then(data => {
 
-        // PG response expected structure
         const pg = data.pg_response;
+        const message = data.message || "Operation completed";
 
-        if (!pg) {
-            showToast("error", "System Error", "Invalid PG response format.");
-            return;
-        }
+        if (data.status === true && pg?.ResultCode === 100) {
 
-        if (pg.ResultCode === 100) {
-            showToast("success", "Payment Successful",
-                `${pg.ResultDescription}<br>${pg.ResultDetails}`
-            );
+            showToast("success", message, pg?.ResultDetails);
+            setTimeout(() => loadFailedPayments(), 1500);
 
-            setTimeout(() => location.reload(), 1500);
         } else {
-            showToast("error", "Payment Failed",
-                `${pg.ResultDescription}<br>${pg.ResultDetails}`
-            );
 
-            if (btnElement) {
-                btnElement.disabled = false;
-                btnElement.innerText = "Retry";
-                btnElement.style.opacity = "1";
-            }
+            showToast("error", message, pg?.ResultDetails);
+            btn.disabled = false;
+            btn.innerText = "Retry";
         }
 
     })
-    .catch(err => {
-        showToast("error", "Request Failed", err.message);
-
-        if (btnElement) {
-            btnElement.disabled = false;
-            btnElement.innerText = "Retry";
-            btnElement.style.opacity = "1";
-        }
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerText = "Retry";
+        showToast("error", "Error", "Request failed");
     });
 }
 
+// confirm button
+document.getElementById("confirmRetryBtn").addEventListener("click", () => {
+    if (!retryData) return;
+    closeRetryModal();
+    retryPayment(retryData.transaction_id, retryData.btn);
+});
 
-
-// ===============================
-// TOAST MESSAGE COMPONENT
-// ===============================
+// toast
 function showToast(type, title, message) {
 
-    let box = document.createElement("div");
+    const box = document.createElement("div");
+    box.className = `toast ${type === 'success' ? 'toast-success' : 'toast-error'}`;
 
-    box.style.position = "fixed";
-    box.style.top = "20px";
-    box.style.left = "50%";
-    box.style.transform = "translateX(-50%) translateY(-10px)";
-    box.style.padding = "18px 22px";
-    box.style.borderRadius = "8px";
-    box.style.fontSize = "15px";
-    box.style.maxWidth = "450px";
-    box.style.width = "auto";
-    box.style.zIndex = "9999";
-    box.style.color = "white";
-    box.style.boxShadow = "0 4px 14px rgba(0,0,0,0.25)";
-    box.style.opacity = "0";
-    box.style.transition = "all 0.3s ease";
-
-    box.style.background = type === "success" ? "#1b5e20" : "#c62828";
-
-    box.innerHTML = `
-        <strong style="font-size:16px;">${title}</strong>
-        <div style="margin-top:6px; font-size:14px; opacity:0.9;">${message}</div>
-    `;
+    box.innerHTML = `<strong>${title}</strong><br>${message || ''}`;
 
     document.body.appendChild(box);
 
-    setTimeout(() => {
-        box.style.opacity = "1";
-        box.style.transform = "translateX(-50%) translateY(0)";
-    }, 50);
-
-    setTimeout(() => {
-        box.style.opacity = "0";
-        box.style.transform = "translateX(-50%) translateY(-10px)";
-        setTimeout(() => box.remove(), 300);
-    }, 4000);
+    setTimeout(() => box.remove(), 4000);
 }
+
 </script>
 
 </body>
