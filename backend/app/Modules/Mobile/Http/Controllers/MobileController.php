@@ -413,7 +413,7 @@ class MobileController extends Controller
         $paymentBatchId = $existingBatch;
 
         // Fetch Beneficiaries
-        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
+        $beneficiaries = DB::table('sa_app_beneficiary_list_5')
             ->where('school_id', $schoolId)
             ->where('payment_status_id', 1)
             ->select(DB::raw("
@@ -688,7 +688,7 @@ class MobileController extends Controller
                     ]);
 
                     // Update related table
-                    DB::table('sa_app_beneficiary_list_4')
+                    DB::table('sa_app_beneficiary_list_5')
                         ->where('transaction_id', $item['TransactionId'])
                         ->update([
                             'payment_status' => $item['PaymentStatus'],
