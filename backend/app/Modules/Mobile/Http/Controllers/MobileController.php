@@ -144,11 +144,6 @@ class MobileController extends Controller
     //login
     public function login(Request $request)
     {
-        // TEMP: Force maintenance mode (disable later)
-        return response()->json([
-            'Message' => 'Production is currently under maintenance. Please use the UAT environment.',
-            'Code'    => 503,
-        ], 503);
         
         // Enforce JSON-only API contract
         if (!$request->expectsJson()) {
