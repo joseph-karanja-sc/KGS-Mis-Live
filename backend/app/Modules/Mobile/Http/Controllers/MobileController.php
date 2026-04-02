@@ -144,11 +144,6 @@ class MobileController extends Controller
     //login
     public function login(Request $request)
     {
-        // TEMP: Force maintenance mode (disable later)
-        return response()->json([
-            'Message' => 'Production is currently under maintenance. Please use the UAT environment.',
-            'Code'    => 503,
-        ], 503);
         
         // Enforce JSON-only API contract
         if (!$request->expectsJson()) {
@@ -202,7 +197,7 @@ class MobileController extends Controller
                 ? $e->getResponse()->getStatusCode()
                 : 502;
 
-            // Log upstream response internally (never expose to client)
+            // log upstream response internally (never expose to client)
             \Log::error('MIS Login Error', [
                 'status' => $httpStatus,
                 'body'   => $e->hasResponse() ? (string) $e->getResponse()->getBody() : null,
@@ -252,7 +247,13 @@ class MobileController extends Controller
             ], 422);
         }
 
-        if (!empty($apiUser['has_ppm_app_access']) && $apiUser['has_ppm_app_access'] == 0) {
+        // get ppm setup details (new source of truth)
+        $ppmUser = \DB::table('ppmuserssetup_details as t1')
+            ->where('t1.user_id', $userId)
+            ->select('t1.id', 't1.has_ppm_app_access', 't1.account_type')
+            ->first();
+
+        if (!$ppmUser || $ppmUser->has_ppm_app_access == 0) {
             return response()->json([
                 'Message' => 'You do not have access to the School Accountant App.',
                 'Code'    => 403,
@@ -322,10 +323,10 @@ class MobileController extends Controller
                 'user' => [
                     'uuid'              => $kgsMisUser->uuid,
                     'email'             => $kgsMisUser->email,
-                    'district_assigned' => $ppmAppUser->district_assigned_string ?? null,
-                    'school_assigned'   => $ppmAppUser->school_assigned_string ?? null,
-                    'school_cwac'       => $ppmAppUser->school_cwac_string ?? null,
-                    'zonal_accountant'  => $ppmAppUser->zonal_accountant ?? null,
+                    'district_assigned' => $district,
+                    'school_assigned' => $schools,
+                    'school_cwac'     => $cwacs,
+                    'zonal_accountant'  => $isZonal,
                 ],
             ], 200)
             ->header('Content-Type', 'application/json')
@@ -341,146 +342,6 @@ class MobileController extends Controller
     }
 
     //get beneficiary payment list
-    public function getBeneficiariesBySchoolOlddz(Request $request)
-    {
-        $userUuid = $request->header('UUID');
-        if (empty($userUuid)) {
-            return response()->json(['message' => 'Please provide UUID'], 400);
-        }
-
-        //Get user from users table
-        $user = DB::table('users')->where('uuid', $userUuid)->first();
-        if (!$user) {
-            return response()->json(['message' => 'This user does not exist'], 404);
-        }
-
-        //Get assigned school (string + ID) from user details table
-        $userDetails = DB::table('sa_app_user_details')
-            ->where('uuid', $userUuid)
-            ->first();
-
-        if (!$userDetails || empty($userDetails->school_assigned_id)) {
-            return response()->json(['message' => 'User has no assigned school.'], 403);
-        }
-
-        $schoolCode = $request->query('school');
-        if (empty($schoolCode)) {
-            return response()->json(['message' => 'Please provide a school code'], 400);
-        }
-
-        //Validate access — does the user match the requested school?
-        $assignedSchoolCode = explode(' ', $userDetails->school_assigned_id)[0];
-        if ($assignedSchoolCode !== $schoolCode) {
-            return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
-        }
-
-        //Validate that school code exists in DB
-        $schoolInfo = DB::table('school_information')->where('id', $schoolCode)->first();
-        if (!$schoolInfo) {
-            return response()->json(['message' => 'Invalid school code provided'], 404);
-        }
-        $schoolId = $schoolInfo->id;
-
-        //Create Payment Batch ID
-        $paymentPeriod = now()->format('Y-m');
-        $randomNumber = strtoupper(bin2hex(random_bytes(6))); // 12-character random string
-        $schoolNameHyphenated = str_replace(' ', '-', $userDetails->school_assigned_string); // Replace spaces with hyphens
-        $paymentBatchId = $schoolNameHyphenated . '-' . $paymentPeriod . '-' . $randomNumber;
-
-        //Get beneficiaries from batch (filtered by school and payment status)
-        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
-            ->where('school_id', $schoolId)
-            ->where('payment_status_id', 1)
-            ->select(DB::raw("
-                COALESCE(transaction_id, 'N/A') AS TransactionID,
-                COALESCE(beneficiary_no, 'N/A') AS BeneficiaryNumber,
-                COALESCE(decrypt(first_name), 'N/A') AS FirstName,
-                COALESCE(decrypt(last_name), 'N/A') AS LastName,
-                COALESCE(school_name, 'N/A') AS School,
-                COALESCE(school_district, 'N/A') AS SchoolDistrict,
-                COALESCE(school_province, 'N/A') AS Province,
-                COALESCE(cwac_name, 'N/A') AS SchoolCwac,
-                COALESCE(mobile_phone_parent_guardian, 'N/A') AS GuardianPhoneNumber,
-                COALESCE(hhh_nrc_number, 'N/A') AS GuardianNRC,
-                COALESCE(decrypt(hhh_fname), 'N/A') AS GuardianFirstName,
-                COALESCE(decrypt(hhh_lname), 'N/A') AS GuardianLastName,
-                COALESCE(grant_amount, 0) AS EducationGrantAmount,
-                COALESCE(transaction_time_initiated, 'N/A') AS TransactionInitiatedAt
-            "))
-            ->get();
-
-            
-
-
-        // Log user activity
-        DB::table('sa_user_activity_logs')->insert([
-            'user_uuid'    => $userUuid,
-            'activity_type'=> 'download beneficiary list',
-            'ip_address'   => $request->ip(),
-            'user_agent'   => $request->header('User-Agent'),
-            'created_at'   => now(),
-        ]);
-
-        //Log the download attempt
-        DB::table('sa_app_payment_list_downloads_log')->insert([
-            'downloaded_by' => $userUuid,
-            'start_timestamp' => now(),
-            'end_timestamp' => now(),
-            'download_successful' => !$beneficiaries->isEmpty(),
-            'school_downloaded' => $userDetails->school_assigned_id,
-            'payment_batch_id' => $paymentBatchId
-        ]);
-
-        //Create the payment batch record
-        DB::table('sa_app_payment_batches')->insert([
-            'PaymentBatchID' => $paymentBatchId,
-            'SchoolID' => $schoolId,
-            'UserUUID' => $userUuid,
-            'DateGenerated' => now(),
-            'Status' => 'Pending',
-            'NumberOfStudents' => $beneficiaries->count(),
-            'AmountDisbursed' => 0,
-            'AmountReturned' => 0
-        ]);
-
-        if ($beneficiaries->isEmpty()) {
-            return response()->json(['message' => 'No beneficiaries found for the provided school.'], 404);
-        }
-
-        //NEW: Pull Head Teacher (designation_id=1) & Guidance Teacher (designation_id=2)
-        // Use school_assigned_id from sch_acc_app_user_details to query school_contactpersons.school_id
-        $schoolAssignedId = $userDetails->school_assigned_id ?? null;
-
-        $headTeacher = null;
-        $guidanceTeacher = null;
-
-        if (!empty($schoolAssignedId)) {
-            // Get both in one query, then map by designation_id
-            $contacts = DB::table('school_contactpersons')
-                ->where('school_id', $schoolAssignedId)
-                ->whereIn('designation_id', [1, 2])
-                ->select('designation_id', 'full_names')
-                ->get()
-                ->keyBy('designation_id');
-
-            $headTeacher = optional($contacts->get(1))->full_names ?? 'N/A';
-            $guidanceTeacher = optional($contacts->get(2))->full_names ?? 'N/A';
-
-        }
-
-        $totalBeneficiaries = $beneficiaries->count();
-        //Return JSON response (now includes head_teacher & guidance_teacher)
-        return response()->json([
-            'payment_batch_id' => $paymentBatchId ?? 'N/A',
-            'school' => $userDetails->school_assigned_string ?? 'N/A',
-            'head_teacher' => $headTeacher ?? 'N/A',
-            'guidance_teacher' => $guidanceTeacher ?? 'N/A',
-            'total_beneficiaries' => $totalBeneficiaries,
-            'payment_list' => $beneficiaries
-        ]);
-
-    }
-
     public function getBeneficiariesBySchool(Request $request)
     {
 
@@ -495,22 +356,30 @@ class MobileController extends Controller
             return response()->json(['message' => 'This user does not exist'], 404);
         }
 
-        // Validate School Access
-        $userDetails = DB::table('sa_app_user_details')
-            ->where('uuid', $userUuid)
-            ->first();
-
-        if (!$userDetails || empty($userDetails->school_assigned_id)) {
-            return response()->json(['message' => 'User has no assigned school.'], 403);
-        }
-
+        // Get school code from request
         $schoolCode = $request->query('school');
+
         if (empty($schoolCode)) {
             return response()->json(['message' => 'Please provide a school code'], 400);
         }
 
-        $assignedSchoolCode = explode(' ', $userDetails->school_assigned_id)[0];
-        if ($assignedSchoolCode !== $schoolCode) {
+        // Validate school access using ppm tables
+        $ppmUser = DB::table('ppmuserssetup_details')
+            ->where('user_id', $user->id)
+            ->select('id')
+            ->first();
+
+        if (!$ppmUser) {
+            return response()->json(['message' => 'User setup not found.'], 403);
+        }
+
+        // Check if user is assigned to this school
+        $hasAccess = DB::table('ppmuserssetup_allocated_schools')
+            ->where('ppm_user_detail_id', $ppmUser->id)
+            ->where('school_id', $schoolCode)
+            ->exists();
+
+        if (!$hasAccess) {
             return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
         }
 
@@ -524,11 +393,24 @@ class MobileController extends Controller
 
         $schoolId = $schoolInfo->id;
 
-        // Generate Payment Batch ID
-        $paymentPeriod = now()->format('Y-m');
-        $randomNumber = strtoupper(bin2hex(random_bytes(6)));
-        $schoolNameHyphenated = str_replace(' ', '-', $userDetails->school_assigned_string);
-        $paymentBatchId = $schoolNameHyphenated . '-' . $paymentPeriod . '-' . $randomNumber;
+        $schoolAssignedString = DB::table('ppmuserssetup_allocated_schools')
+        ->where('ppm_user_detail_id', $ppmUser->id)
+        ->where('school_id', $schoolCode)
+        ->value('school_name');
+
+        // Fetch existing payment batch id from table
+        $existingBatch = DB::table('sa_app_beneficiary_list_4')
+            ->where('school_id', $schoolId)
+            ->whereNotNull('sch_pay_bat_id')
+            ->value('sch_pay_bat_id');
+
+        if (!$existingBatch) {
+            return response()->json([
+                'message' => 'No payment batch found for this school'
+            ], 404);
+        }
+
+        $paymentBatchId = $existingBatch;
 
         // Fetch Beneficiaries
         $beneficiaries = DB::table('sa_app_beneficiary_list_4')
@@ -570,24 +452,27 @@ class MobileController extends Controller
             'start_timestamp' => now(),
             'end_timestamp' => now(),
             'download_successful' => !$beneficiaries->isEmpty(),
-            'school_downloaded' => $userDetails->school_assigned_id,
+            'school_downloaded' => $schoolAssignedString,
             'payment_batch_id' => $paymentBatchId
         ]);
 
-        DB::table('sa_app_payment_batches')->insert([
-            'PaymentBatchID' => $paymentBatchId,
-            'SchoolID' => $schoolId,
-            'UserUUID' => $userUuid,
-            'DateGenerated' => now(),
-            'Status' => 'Pending',
-            'NumberOfStudents' => $beneficiaries->count(),
-            'AmountDisbursed' => 0,
-            'AmountReturned' => 0
-        ]);
+        DB::table('sa_app_payment_batches')->updateOrInsert(
+            ['PaymentBatchID' => $paymentBatchId], // check existing
+            [
+                'SchoolID' => $schoolId,
+                'UserUUID' => $userUuid,
+                'DateGenerated' => now(),
+                'Status' => 'Pending',
+                'NumberOfStudents' => $beneficiaries->count(),
+                'AmountDisbursed' => 0,
+                'AmountReturned' => 0
+            ]
+        );
 
         // Head Teacher & Guidance Teacher
         $contacts = DB::table('school_contactpersons')
-            ->where('school_id', $userDetails->school_assigned_id)
+            // ->where('school_id', $userDetails->school_assigned_id)
+            ->where('school_id', $schoolId)
             ->whereIn('designation_id', [1, 2])
             ->select('designation_id', 'full_names')
             ->get()
@@ -607,7 +492,7 @@ class MobileController extends Controller
         $pdf->AddPage();
 
         $html = '<h3>Payment Batch ID: '.$paymentBatchId.'</h3>
-        <p><strong>School:</strong> '.$userDetails->school_assigned_string.'</p>
+        <p><strong>School:</strong> '.$schoolAssignedString.'</p>
         <table border="1" cellpadding="3">
             <tr>
                 <th width="15">#</th>
@@ -650,10 +535,12 @@ class MobileController extends Controller
             ['filename' => $fileName]
         );
 
+        $schoolClean = preg_replace('/^\d+\s*-\s*/', '', $schoolAssignedString);
+
         // Final JSON
         return response()->json([
             'payment_batch_id' => $paymentBatchId,
-            'school' => $userDetails->school_assigned_string,
+            'school' => $schoolClean,
             'head_teacher' => $headTeacher,
             'guidance_teacher' => $guidanceTeacher,
             'total_beneficiaries' => $beneficiaries->count(),
@@ -801,7 +688,7 @@ class MobileController extends Controller
                     ]);
 
                     // Update related table
-                    DB::table('sa_app_beneficiary_list')
+                    DB::table('sa_app_beneficiary_list_4')
                         ->where('transaction_id', $item['TransactionId'])
                         ->update([
                             'payment_status' => $item['PaymentStatus'],
@@ -828,7 +715,7 @@ class MobileController extends Controller
                 ]);
                 return response()->json([
                     'Message' => 'Some records failed to process',
-                    'Errors' => $errors,
+                    // 'Errors' => $errors,
                     'SuccessCount' => $successCount
                 ], 422);
             }
@@ -845,13 +732,12 @@ class MobileController extends Controller
 
             return response()->json([
                 'Message' => 'Server error while processing request',
-                'Error' => $e->getMessage()
+                // 'Error' => $e->getMessage()
             ], 500);
         }
     }
 
-    //beneficiary images
-    public function beneficiaryImagesV1(Request $request)
+    public function beneficiaryImagesOld(Request $request)
     {
         try {
             // === 1) Bearer token validation ===
@@ -975,6 +861,7 @@ class MobileController extends Controller
         }
     }
 
+    //beneficiary images
     public function beneficiaryImages(Request $request)
     {
         try {
@@ -1022,12 +909,12 @@ class MobileController extends Controller
                     [
                         'BeneficiaryNumber' => 'required|string',
                         'ImageId'           => 'required|string',
-                        'ImageUrl'          => 'required|string',
-                        'ImageCategory'     => 'required|integer|in:1,2,3',
+                        'ImageUrl'          => 'required|string',            // base64
+                        'ImageCategory'     => 'required|integer|in:1,2,3,4,5,6',  // only 1,2,3,4,5,6 allowed
                         'ImageDescription'  => 'nullable|string',
                     ],
                     [
-                        'ImageCategory.in' => 'ImageCategory must be one of: 1 (beneficiary_image), 2 (Guardian_image), 3 (other).',
+                        'ImageCategory.in'  => 'ImageCategory must be one of: 1 (beneficiary_image), 2 (beneficiary_signature), 3 (guardian_image) 4 (guardian_signature) 5 (G&C_teacher_image) 6 (G&C_teacher_signature).',
                     ]
                 );
 
@@ -1069,7 +956,7 @@ class MobileController extends Controller
                 return response()->json([
                     'message'          => 'Some records could not be saved due to validation errors',
                     'inserted_records' => $insertedRecordsCount,
-                    'errors'           => $errors
+                    // 'errors'           => $errors
                 ], 422);
             }
 
@@ -1090,14 +977,15 @@ class MobileController extends Controller
         } catch (\Exception $e) {
             Log::error('Beneficiary image upload failed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                // 'trace' => $e->getTraceAsString(),
             ]);
             return response()->json([
                 'error' => 'Server error while processing request',
-                'details' => $e->getMessage(),
+                // 'details' => $e->getMessage(),
             ], 500);
         }
     }
+
 
     //submit deposit slip
     public function submitDepositSlip(Request $request)
@@ -1143,6 +1031,7 @@ class MobileController extends Controller
             // === 3) Validate Request Body ===
             $data = $request->validate([
                 'deposit_slip_image' => 'required|string',
+                'expected_amount'   => 'required|numeric',
                 'amount_deposited'   => 'required|numeric',
                 'comments'           => 'nullable|string'
             ]);
@@ -1154,6 +1043,7 @@ class MobileController extends Controller
                 'PaymentBatchID'   => $paymentBatchId,
                 'UserUUID'         => $userUuid,
                 'DepositSlipImage' => $data['deposit_slip_image'],
+                'ExpectedAmount'  => $data['amount_deposited'],
                 'AmountDeposited'  => $data['amount_deposited'],
                 'Comments'         => $data['comments'] ?? null,
                 'DateSubmitted'    => now(),
@@ -1176,7 +1066,7 @@ class MobileController extends Controller
             // Input validation error
             return response()->json([
                 'message' => 'Validation error',
-                'errors'  => $e->errors(),
+                // 'errors'  => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
             // Rollback in case of failure
@@ -1189,7 +1079,7 @@ class MobileController extends Controller
 
             return response()->json([
                 'message' => 'Server error while submitting deposit slip',
-                'error'   => $e->getMessage(),
+                // 'error'   => $e->getMessage(),
             ], 500);
         }
     }

@@ -55,9 +55,10 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     Route::post('/pg/submit-single-payment-to-pg', 'MobileController@submitSinglePaymentToPG');
     Route::get('/kgs/payments/generate-sch-payload1', 'MobileController@buildSingleSchoolPayload1');
     Route::get('/regen-tid', 'MobileController@regenerateTransactionIds');
+    Route::get('/gen-sch-pay-bat', 'MobileController@generateSchoolPaymentBatches');
+
     
     Route::get('/migrate-records', 'MobileController@migrateBeneficiariesToReport');
-
 
     Route::get('/pg/transactions', 'MobileController@pgLogsList');
     Route::get('/pg/transactions/{transaction_id}', 'MobileController@pgLogsDetails');
