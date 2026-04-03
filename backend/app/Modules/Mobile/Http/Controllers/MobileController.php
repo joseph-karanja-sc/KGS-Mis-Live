@@ -569,7 +569,8 @@ class MobileController extends Controller
         // 3) Call upstream mis login api
         try {
             $client = new \GuzzleHttp\Client([
-                'base_uri' => config('app.pg_base_url') . '/api/',
+                // 'base_uri' => config('app.pg_base_url') . '/api/',
+                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
                 'timeout'  => 15,
             ]);
 
