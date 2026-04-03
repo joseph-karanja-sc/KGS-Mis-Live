@@ -1180,7 +1180,7 @@ class MobileController extends Controller
         return response()->json([
             'message' => 'This feature is currently under maintenance. Please try again later.'
         ], 503);
-        
+
         try {
             // === 1) Validate Bearer Token ===
             $authorizationHeader = $request->header('Authorization');
@@ -1482,6 +1482,9 @@ class MobileController extends Controller
     //beneficiary images
     public function beneficiaryImages(Request $request)
     {
+        return response()->json([
+            'message' => 'This feature is currently under maintenance. Please try again later.'
+        ], 503);
         try {
             // === 1) Bearer token validation ===
             $authorizationHeader = $request->header('Authorization');
