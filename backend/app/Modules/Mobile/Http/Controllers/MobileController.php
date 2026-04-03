@@ -1177,6 +1177,10 @@ class MobileController extends Controller
     //post transaction status
     public function sendPaymentStatuses(Request $request)
     {
+        return response()->json([
+            'message' => 'This feature is currently under maintenance. Please try again later.'
+        ], 503);
+        
         try {
             // === 1) Validate Bearer Token ===
             $authorizationHeader = $request->header('Authorization');
