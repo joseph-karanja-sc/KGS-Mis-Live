@@ -569,6 +569,7 @@ class MobileController extends Controller
         try {
             $client = new \GuzzleHttp\Client([
                 'base_uri' => rtrim(config('app.pg_base_url'), '/') . '/',
+                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
                 'timeout'  => 15,
             ]);
 
