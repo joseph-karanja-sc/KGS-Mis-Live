@@ -198,9 +198,18 @@ class MobileController extends Controller
                 : 502;
 
             // log upstream response internally (never expose to client)
-            \Log::error('MIS Login Error', [
-                'status' => $httpStatus,
-                'body'   => $e->hasResponse() ? (string) $e->getResponse()->getBody() : null,
+            // \Log::error('MIS Login Error', [
+            //     'status' => $httpStatus,
+            //     'body'   => $e->hasResponse() ? (string) $e->getResponse()->getBody() : null,
+            // ]);
+            \Log::error('MIS Login Error FULL', [
+                'message' => $e->getMessage(),
+                'code'    => $e->getCode(),
+                'request' => (string) $e->getRequest()->getUri(),
+                'has_response' => $e->hasResponse(),
+                'response_body' => $e->hasResponse()
+                    ? (string) $e->getResponse()->getBody()
+                    : null,
             ]);
 
             return response()->json([
