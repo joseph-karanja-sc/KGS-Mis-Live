@@ -986,6 +986,60 @@ class MobileController extends Controller
         }
     }
 
+    private function saveSchoolAppImage($base64Image, $beneficiaryNumber)
+    {
+        try {
+            if (empty($base64Image)) {
+                throw new \Exception("Empty base64 image provided");
+            }
+
+            // Remove base64 header
+            $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
+
+            $imageData = base64_decode($base64Image, true);
+
+            if ($imageData === false) {
+                throw new \Exception("Invalid base64 image data");
+            }
+
+            $year  = date('Y');
+            $month = date('m');
+
+            $fileName = "img{$beneficiaryNumber}_{$year}_{$month}_" . uniqid() . ".jpg";
+
+            // 🔥 NEW FOLDER
+            $folder = 'sch_acc_app_images';
+
+            $directory = public_path("img/{$folder}");
+
+            if (!is_dir($directory)) {
+                if (!mkdir($directory, 0777, true) && !is_dir($directory)) {
+                    throw new \Exception("Failed to create directory: {$directory}");
+                }
+            }
+
+            $filePath = $directory . '/' . $fileName;
+
+            $bytesWritten = file_put_contents($filePath, $imageData);
+
+            if ($bytesWritten === false) {
+                throw new \Exception("Failed to write image to disk: {$filePath}");
+            }
+
+            // return RELATIVE PATH (better than full URL)
+            return "/img/{$folder}/{$fileName}";
+
+        } catch (\Exception $e) {
+
+            \Log::error("saveSchoolAppImage failed", [
+                'beneficiary_number' => $beneficiaryNumber,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
+        }
+    }
+
 
     //submit deposit slip
     public function submitDepositSlip(Request $request)
