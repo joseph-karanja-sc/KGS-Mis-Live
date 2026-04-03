@@ -263,6 +263,11 @@ class MobileController extends Controller
             ->select('t1.id', 't1.has_ppm_app_access', 't1.account_type')
             ->first();
 
+        $district = $ppmAppUser->district_assigned_string ?? null;
+        $schools  = $ppmAppUser->school_assigned_string ?? null;
+        $cwacs    = $ppmAppUser->school_cwac_string ?? null;
+        $isZonal  = $ppmAppUser->zonal_accountant ?? 0;
+
         if (!$ppmUser || $ppmUser->has_ppm_app_access == 0) {
             return response()->json([
                 'Message' => 'You do not have access to the School Accountant App.',
