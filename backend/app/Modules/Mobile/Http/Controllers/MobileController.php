@@ -539,9 +539,10 @@ class MobileController extends Controller
             ->header('X-Content-Type-Options', 'nosniff');
     }
 
+    //added by jose 25-mar-2026
     public function login(Request $request)
     {
-        // Enforce JSON-only API contract
+        // 1) Enforce json-only api contract
         if (!$request->expectsJson()) {
             return response()->json([
                 'Message' => 'Unsupported media type. JSON requests only.',
@@ -549,7 +550,7 @@ class MobileController extends Controller
             ], 415);
         }
 
-        // Manual validation
+        // 2) Manual validation (no $request->validate())
         $validator = \Validator::make($request->all(), [
             'Email'    => 'required|string',
             'Password' => 'required|string',
@@ -565,11 +566,10 @@ class MobileController extends Controller
 
         $validatedData = $validator->validated();
 
-        // Call upstream MIS login API
+        // 3) Call upstream mis login api
         try {
             $client = new \GuzzleHttp\Client([
-                'base_uri' => rtrim(config('app.pg_base_url'), '/') . '/',
-                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
+                'base_uri' => config('app.pg_base_url') . '/api/',
                 'timeout'  => 15,
             ]);
 
@@ -594,14 +594,10 @@ class MobileController extends Controller
                 ? $e->getResponse()->getStatusCode()
                 : 502;
 
-            \Log::error('MIS Login Error FULL', [
-                'message' => $e->getMessage(),
-                'code'    => $e->getCode(),
-                'request' => (string) $e->getRequest()->getUri(),
-                'has_response' => $e->hasResponse(),
-                'response_body' => $e->hasResponse()
-                    ? (string) $e->getResponse()->getBody()
-                    : null,
+            // log upstream response internally (never expose to client)
+            \Log::error('MIS Login Error', [
+                'status' => $httpStatus,
+                'body'   => $e->hasResponse() ? (string) $e->getResponse()->getBody() : null,
             ]);
 
             return response()->json([
@@ -610,8 +606,9 @@ class MobileController extends Controller
             ], $httpStatus);
         }
 
-        // Handle upstream error codes
-        $code = (int) ($payload['code'] ?? $httpStatus);
+        // 4) Handle upstream error codes cleanly
+        $code            = (int) ($payload['code'] ?? $httpStatus);
+        $externalMessage = $payload['message'] ?? null;
 
         if ($code !== 200) {
             switch ($code) {
@@ -634,7 +631,7 @@ class MobileController extends Controller
             ], ($code >= 100 && $code < 600) ? $code : 400);
         }
 
-        // Extract user
+        // 5) Extract user + access checks
         $apiUser = $payload['user'] ?? null;
         $userId  = is_array($apiUser)
             ? ($apiUser['user_id'] ?? $apiUser['id'] ?? null)
@@ -647,7 +644,7 @@ class MobileController extends Controller
             ], 422);
         }
 
-        // Check PPM access
+        // get ppm setup details (new source of truth)
         $ppmUser = \DB::table('ppmuserssetup_details as t1')
             ->where('t1.user_id', $userId)
             ->select('t1.id', 't1.has_ppm_app_access', 't1.account_type')
@@ -660,7 +657,7 @@ class MobileController extends Controller
             ], 403);
         }
 
-        // Fetch local MIS user
+        // 6) Fetch local mis user
         $kgsMisUser = \DB::table('users')
             ->where('id', $userId)
             ->select(\DB::raw('uuid, decrypt(email) AS email'))
@@ -673,7 +670,7 @@ class MobileController extends Controller
             ], 404);
         }
 
-        // Generate token
+        // 7) Token generation + persistence
         $tokenString = \Illuminate\Support\Str::random(80);
 
         \DB::table('sa_app_token_management')->insert([
@@ -694,7 +691,7 @@ class MobileController extends Controller
             ]
         );
 
-        // Log activity
+        // 8) Activity logging
         \DB::table('sa_user_activity_logs')->insert([
             'user_uuid'     => $kgsMisUser->uuid,
             'activity_type' => 'login',
@@ -703,44 +700,42 @@ class MobileController extends Controller
             'created_at'    => now(),
         ]);
 
-        // Load app-specific assignments
-        $ppmAppUser = \DB::table('sa_app_user_details')
-            ->where('user_id', $userId)
-            ->select(
-                'district_assigned_string',
-                'school_assigned_string',
-                'school_cwac_string',
-                'zonal_accountant'
-            )
-            ->first();
+        // 9) Load assignments from new ppm tables
+        // get schools assigned
+        $schoolsData = \DB::table('ppmuserssetup_allocated_schools as t2')
+            ->where('t2.ppm_user_detail_id', $ppmUser->id)
+            ->select('t2.school_name', 't2.cwac_name')
+            ->get();
 
-        // Safe mapping (NO crashes)
-        $district = optional($ppmAppUser)->district_assigned_string;
-        $schools  = optional($ppmAppUser)->school_assigned_string;
-        $cwacs    = optional($ppmAppUser)->school_cwac_string;
-        $isZonal  = optional($ppmAppUser)->zonal_accountant ?? 0;
+        // split into separate arrays
+        $schools = $schoolsData->pluck('school_name')->toArray();
+        $cwacs   = $schoolsData->pluck('cwac_name')->toArray();
 
-        // Log if missing (important for LIVE debugging)
-        if (!$ppmAppUser) {
-            \Log::warning('PPM assignment missing for user', ['user_id' => $userId]);
-        }
+        // get districts assigned
+        $district = \DB::table('ppmuserssetup_allocated_districts as t3')
+            ->where('t3.ppm_user_detail_id', $ppmUser->id)
+            ->value('t3.district_name');
 
-        // Final response
-        return response()->json([
-            'access_token' => $tokenString,
-            'token_type'   => 'Bearer',
-            'expires_at'   => now()->addHours(24)->toDateTimeString(),
-            'user' => [
-                'uuid'              => $kgsMisUser->uuid,
-                'email'             => $kgsMisUser->email,
-                'district_assigned' => $district,
-                'school_assigned'   => $schools,
-                'school_cwac'       => $cwacs,
-                'zonal_accountant'  => $isZonal,
-            ],
-        ], 200)
-        ->header('Content-Type', 'application/json')
-        ->header('X-Content-Type-Options', 'nosniff');
+        // determine zonal flag from account_type
+        $isZonal = ($ppmUser->account_type === 'zonal_accountant') ? 1 : 0;
+
+        // 10) Final json response
+        return response()
+            ->json([
+                'access_token' => $tokenString,
+                'token_type'   => 'Bearer',
+                'expires_at'   => now()->addHours(24)->toDateTimeString(),
+                'user' => [
+                    'uuid'              => $kgsMisUser->uuid,
+                    'email'             => $kgsMisUser->email,
+                    'district_assigned' => $district,
+                    'school_assigned' => $schools,
+                    'school_cwac'     => $cwacs,
+                    'zonal_accountant'  => $isZonal,
+                ],
+            ], 200)
+            ->header('Content-Type', 'application/json')
+            ->header('X-Content-Type-Options', 'nosniff');
     }
 
 
