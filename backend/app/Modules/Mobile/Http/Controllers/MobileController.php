@@ -142,213 +142,7 @@ class MobileController extends Controller
 
     // functions for School accountant app are below (added by joseph oct 2025)(updated 30-mar-26)
     //login
-    public function loginMzee(Request $request)
-    {
-        
-        // Enforce JSON-only API contract
-        if (!$request->expectsJson()) {
-            return response()->json([
-                'Message' => 'Unsupported media type. JSON requests only.',
-                'Code'    => 415,
-            ], 415);
-        }
-
-        // Manual validation (NO $request->validate())
-        $validator = \Validator::make($request->all(), [
-            'Email'    => 'required|string',
-            'Password' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'Message' => 'Validation failed.',
-                'Errors'  => $validator->errors(),
-                'Code'    => 422,
-            ], 422);
-        }
-
-        $validatedData = $validator->validated();
-
-        // Call upstream MIS login API
-        try {
-            $client = new \GuzzleHttp\Client([
-                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
-                // 'base_uri' => config('app.pg_base_url') . '/api/',
-                'timeout'  => 15,
-            ]);
-
-            $response = $client->post('api-login', [
-                'json' => [
-                    'email'       => $validatedData['Email'],
-                    'password'    => $validatedData['Password'],
-                    'remember_me' => 1,
-                ],
-                'headers' => [
-                    'Accept'       => 'application/json',
-                    'Content-Type' => 'application/json',
-                ],
-            ]);
-
-            $httpStatus = $response->getStatusCode();
-            $payload    = json_decode((string) $response->getBody(), true) ?: [];
-
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-
-            $httpStatus = $e->hasResponse()
-                ? $e->getResponse()->getStatusCode()
-                : 502;
-
-            // log upstream response internally (never expose to client)
-            // \Log::error('MIS Login Error', [
-            //     'status' => $httpStatus,
-            //     'body'   => $e->hasResponse() ? (string) $e->getResponse()->getBody() : null,
-            // ]);
-            \Log::error('MIS Login Error FULL', [
-                'message' => $e->getMessage(),
-                'code'    => $e->getCode(),
-                'request' => (string) $e->getRequest()->getUri(),
-                'has_response' => $e->hasResponse(),
-                'response_body' => $e->hasResponse()
-                    ? (string) $e->getResponse()->getBody()
-                    : null,
-            ]);
-
-            return response()->json([
-                'Message' => 'Authentication service unavailable. Please try again later.',
-                'Code'    => $httpStatus,
-            ], $httpStatus);
-        }
-
-        // Handle upstream error codes cleanly
-        $code            = (int) ($payload['code'] ?? $httpStatus);
-        $externalMessage = $payload['message'] ?? null;
-
-        if ($code !== 200) {
-            switch ($code) {
-                case 404:
-                    $friendlyMessage = "We couldn't find an account with that email address.";
-                    break;
-                case 403:
-                    $friendlyMessage = "This account has been blocked. Please contact support.";
-                    break;
-                case 401:
-                    $friendlyMessage = "Incorrect credentials or too many failed attempts.";
-                    break;
-                default:
-                    $friendlyMessage = "Login failed. Please try again.";
-            }
-
-            return response()->json([
-                'Message' => $friendlyMessage,
-                'Code'    => $code,
-            ], ($code >= 100 && $code < 600) ? $code : 400);
-        }
-
-        // Extract user + access checks
-        $apiUser = $payload['user'] ?? null;
-        $userId  = is_array($apiUser)
-            ? ($apiUser['user_id'] ?? $apiUser['id'] ?? null)
-            : null;
-
-        if (!$userId) {
-            return response()->json([
-                'Message' => 'Login successful but user identifier missing.',
-                'Code'    => 422,
-            ], 422);
-        }
-
-        // get ppm setup details (new source of truth)
-        $ppmUser = \DB::table('ppmuserssetup_details as t1')
-            ->where('t1.user_id', $userId)
-            ->select('t1.id', 't1.has_ppm_app_access', 't1.account_type')
-            ->first();
-
-        $district = $ppmAppUser->district_assigned_string ?? null;
-        $schools  = $ppmAppUser->school_assigned_string ?? null;
-        $cwacs    = $ppmAppUser->school_cwac_string ?? null;
-        $isZonal  = $ppmAppUser->zonal_accountant ?? 0;
-
-        if (!$ppmUser || $ppmUser->has_ppm_app_access == 0) {
-            return response()->json([
-                'Message' => 'You do not have access to the School Accountant App.',
-                'Code'    => 403,
-            ], 403);
-        }
-
-        // Fetch local MIS user
-        $kgsMisUser = \DB::table('users')
-            ->where('id', $userId)
-            ->select(\DB::raw('uuid, decrypt(email) AS email'))
-            ->first();
-
-        if (!$kgsMisUser) {
-            return response()->json([
-                'Message' => 'User authenticated but not found in MIS.',
-                'Code'    => 404,
-            ], 404);
-        }
-
-        // Token generation + persistence
-        $tokenString = \Illuminate\Support\Str::random(80);
-
-        \DB::table('sa_app_token_management')->insert([
-            'user_uuid'  => $kgsMisUser->uuid,
-            'token'      => $tokenString,
-            'expires_at' => now()->addHours(24),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        \DB::table('sa_app_user_management')->updateOrInsert(
-            ['user_id' => $userId],
-            [
-                'access_token' => $tokenString,
-                'API_key'      => \Illuminate\Support\Str::random(40),
-                'updated_at'   => now(),
-                'created_at'   => now(),
-            ]
-        );
-
-        // Activity logging
-        \DB::table('sa_user_activity_logs')->insert([
-            'user_uuid'     => $kgsMisUser->uuid,
-            'activity_type' => 'login',
-            'ip_address'    => $request->ip(),
-            'user_agent'    => $request->header('User-Agent'),
-            'created_at'    => now(),
-        ]);
-
-        // Load app-specific assignments
-        $ppmAppUser = \DB::table('sa_app_user_details')
-            ->where('user_id', $userId)
-            ->select(
-                'district_assigned_string',
-                'school_assigned_string',
-                'school_cwac_string',
-                'zonal_accountant'
-            )
-            ->first();
-
-        // Final JSON response (locked & safe)
-        return response()
-            ->json([
-                'access_token' => $tokenString,
-                'token_type'   => 'Bearer',
-                'expires_at'   => now()->addHours(24)->toDateTimeString(),
-                'user' => [
-                    'uuid'              => $kgsMisUser->uuid,
-                    'email'             => $kgsMisUser->email,
-                    'district_assigned' => $district,
-                    'school_assigned' => $schools,
-                    'school_cwac'     => $cwacs,
-                    'zonal_accountant'  => $isZonal,
-                ],
-            ], 200)
-            ->header('Content-Type', 'application/json')
-            ->header('X-Content-Type-Options', 'nosniff');
-    }
-
-    public function loginv11(Request $request)
+    public function loginuat(Request $request)
     {
         
         // Enforce JSON-only API contract
@@ -739,7 +533,6 @@ class MobileController extends Controller
             ->header('X-Content-Type-Options', 'nosniff');
     }
 
-
     public function testing(Request $request)
     {
         return response()->json([
@@ -748,213 +541,6 @@ class MobileController extends Controller
         ], 200);
     }
 
-    //get beneficiary payment list
-    public function getBeneficiariesBySchoolv11(Request $request)
-    {
-
-        // Validate UUID
-        $userUuid = $request->header('UUID');
-        if (empty($userUuid)) {
-            return response()->json(['message' => 'Please provide UUID'], 400);
-        }
-
-        $user = DB::table('users')->where('uuid', $userUuid)->first();
-        if (!$user) {
-            return response()->json(['message' => 'This user does not exist'], 404);
-        }
-
-        // Get school code from request
-        $schoolCode = $request->query('school');
-
-        if (empty($schoolCode)) {
-            return response()->json(['message' => 'Please provide a school code'], 400);
-        }
-
-        // Validate school access using ppm tables
-        $ppmUser = DB::table('ppmuserssetup_details')
-            ->where('user_id', $user->id)
-            ->select('id')
-            ->first();
-
-        if (!$ppmUser) {
-            return response()->json(['message' => 'User setup not found.'], 403);
-        }
-
-        // Check if user is assigned to this school
-        $hasAccess = DB::table('ppmuserssetup_allocated_schools')
-            ->where('ppm_user_detail_id', $ppmUser->id)
-            ->where('school_id', $schoolCode)
-            ->exists();
-
-        if (!$hasAccess) {
-            return response()->json(['message' => 'You are forbidden to download this payment list'], 403);
-        }
-
-        $schoolInfo = DB::table('school_information')
-            ->where('id', $schoolCode)
-            ->first();
-
-        if (!$schoolInfo) {
-            return response()->json(['message' => 'Invalid school code provided'], 404);
-        }
-
-        $schoolId = $schoolInfo->id;
-
-        $schoolAssignedString = DB::table('ppmuserssetup_allocated_schools')
-        ->where('ppm_user_detail_id', $ppmUser->id)
-        ->where('school_id', $schoolCode)
-        ->value('school_name');
-
-        // Fetch existing payment batch id from table
-        $existingBatch = DB::table('sa_app_beneficiary_list_5')
-            ->where('school_id', $schoolId)
-            ->whereNotNull('sch_pay_bat_id')
-            ->value('sch_pay_bat_id');
-
-        if (!$existingBatch) {
-            return response()->json([
-                'message' => 'No payment batch found for this school'
-            ], 404);
-        }
-
-        $paymentBatchId = $existingBatch;
-
-        // Fetch Beneficiaries
-        $beneficiaries = DB::table('sa_app_beneficiary_list_5')
-            ->where('school_id', $schoolId)
-            ->where('payment_status_id', 1)
-            ->select(DB::raw("
-                COALESCE(transaction_id, 'N/A') AS TransactionID,
-                COALESCE(beneficiary_no, 'N/A') AS BeneficiaryNumber,
-                COALESCE(decrypt(first_name), 'N/A') AS FirstName,
-                COALESCE(decrypt(last_name), 'N/A') AS LastName,
-                COALESCE(school_name, 'N/A') AS School,
-                COALESCE(school_district, 'N/A') AS SchoolDistrict,
-                COALESCE(school_province, 'N/A') AS Province,
-                COALESCE(cwac_name, 'N/A') AS SchoolCwac,
-                COALESCE(mobile_phone_parent_guardian, 'N/A') AS GuardianPhoneNumber,
-                COALESCE(hhh_nrc_number, 'N/A') AS GuardianNRC,
-                COALESCE(decrypt(hhh_fname), 'N/A') AS GuardianFirstName,
-                COALESCE(decrypt(hhh_lname), 'N/A') AS GuardianLastName,
-                COALESCE(grant_amount, 0) AS EducationGrantAmount,
-                COALESCE(transaction_time_initiated, 'N/A') AS TransactionInitiatedAt
-            "))
-            ->get();
-
-        if ($beneficiaries->isEmpty()) {
-            return response()->json(['message' => 'No beneficiaries found for the provided school.'], 404);
-        }
-
-        // Logging
-        DB::table('sa_user_activity_logs')->insert([
-            'user_uuid'    => $userUuid,
-            'activity_type'=> 'download beneficiary list',
-            'ip_address'   => $request->ip(),
-            'user_agent'   => $request->header('User-Agent'),
-            'created_at'   => now(),
-        ]);
-
-        DB::table('sa_app_payment_list_downloads_log')->insert([
-            'downloaded_by' => $userUuid,
-            'start_timestamp' => now(),
-            'end_timestamp' => now(),
-            'download_successful' => !$beneficiaries->isEmpty(),
-            'school_downloaded' => $schoolAssignedString,
-            'payment_batch_id' => $paymentBatchId
-        ]);
-
-        DB::table('sa_app_payment_batches')->updateOrInsert(
-            ['PaymentBatchID' => $paymentBatchId], // check existing
-            [
-                'SchoolID' => $schoolId,
-                'UserUUID' => $userUuid,
-                'DateGenerated' => now(),
-                'Status' => 'Pending',
-                'NumberOfStudents' => $beneficiaries->count(),
-                'AmountDisbursed' => 0,
-                'AmountReturned' => 0
-            ]
-        );
-
-        // Head Teacher & Guidance Teacher
-        $contacts = DB::table('school_contactpersons')
-            // ->where('school_id', $userDetails->school_assigned_id)
-            ->where('school_id', $schoolId)
-            ->whereIn('designation_id', [1, 2])
-            ->select('designation_id', 'full_names')
-            ->get()
-            ->keyBy('designation_id');
-
-        $headTeacher = optional($contacts->get(1))->full_names ?? 'N/A';
-        $guidanceTeacher = optional($contacts->get(2))->full_names ?? 'N/A';
-
-        // Generate PDF Using TCPDF
-        $fileName = $paymentBatchId . '.pdf';
-        $filePath = storage_path('app/public/payment_lists/' . $fileName);
-
-        $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetMargins(10, 10, 10);
-        $pdf->SetAutoPageBreak(true, 10);
-        $pdf->SetFont('helvetica', '', 9);
-        $pdf->AddPage();
-
-        $html = '<h3>Payment Batch ID: '.$paymentBatchId.'</h3>
-        <p><strong>School:</strong> '.$schoolAssignedString.'</p>
-        <table border="1" cellpadding="3">
-            <tr>
-                <th width="15">#</th>
-                <th width="50">Ben. No</th>
-                <th width="70">Full Name</th>
-                <th width="35">Grant</th>
-                <th width="70">Guardian</th>
-            </tr>';
-
-        $counter = 1;
-        $totalAmount = 0;
-
-        foreach ($beneficiaries as $row) {
-
-            $html .= '<tr>
-                <td align="center">'.$counter.'</td>
-                <td align="center">'.$row->BeneficiaryNumber.'</td>
-                <td>'.$row->FirstName.' '.$row->LastName.'</td>
-                <td align="right">'.number_format($row->EducationGrantAmount, 2).'</td>
-                <td>'.$row->GuardianFirstName.' '.$row->GuardianLastName.'</td>
-            </tr>';
-
-            $totalAmount += $row->EducationGrantAmount;
-            $counter++;
-        }
-
-        $html .= '<tr>
-            <td colspan="3" align="right"><strong>TOTAL</strong></td>
-            <td align="right"><strong>'.number_format($totalAmount, 2).'</strong></td>
-            <td></td>
-        </tr></table>';
-
-        $pdf->writeHTML($html, true, false, true, false, '');
-        $pdf->Output($filePath, 'F');
-
-        // Signed URL (10 Minutes)
-        $downloadUrl = URL::temporarySignedRoute(
-            'download.payment.list',
-            now()->addMinutes(10),
-            ['filename' => $fileName]
-        );
-
-        $schoolClean = preg_replace('/^\d+\s*-\s*/', '', $schoolAssignedString);
-
-        // Final JSON
-        return response()->json([
-            'payment_batch_id' => $paymentBatchId,
-            'school' => $schoolClean,
-            'head_teacher' => $headTeacher,
-            'guidance_teacher' => $guidanceTeacher,
-            'total_beneficiaries' => $beneficiaries->count(),
-            'pdf_download_link' => $downloadUrl,
-            'payment_list' => $beneficiaries
-        ]);
-    }
     //get beneficiary payment list
     public function getBeneficiariesBySchool(Request $request)
     {
@@ -1013,7 +599,7 @@ class MobileController extends Controller
         ->value('school_name');
 
         // Fetch existing payment batch id from table
-        $existingBatch = DB::table('sa_app_beneficiary_list_5')
+        $existingBatch = DB::table('sa_app_beneficiary_list_4')
             ->where('school_id', $schoolId)
             ->whereNotNull('sch_pay_bat_id')
             ->value('sch_pay_bat_id');
@@ -1027,7 +613,7 @@ class MobileController extends Controller
         $paymentBatchId = $existingBatch;
 
         // Fetch Beneficiaries
-        $beneficiaries = DB::table('sa_app_beneficiary_list_5')
+        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
             ->where('school_id', $schoolId)
             ->where('payment_status_id', 1)
             ->select(DB::raw("
@@ -1177,10 +763,6 @@ class MobileController extends Controller
     //post transaction status
     public function sendPaymentStatuses(Request $request)
     {
-        return response()->json([
-            'message' => 'This feature is currently under maintenance. Please try again later.'
-        ], 503);
-
         try {
             // === 1) Validate Bearer Token ===
             $authorizationHeader = $request->header('Authorization');
@@ -1232,9 +814,9 @@ class MobileController extends Controller
                     'PaymentStatus'          => 'required|string',
                     'ImageIDs'               => 'required|array',
                     'DateReceived'           => 'required|date',
-                    'GpsLatitude'            => 'required', // Removed |required to test
-                    'GpsLongitude'           => 'required',
-                    'GpsAltitude'            => 'required',
+                    'GpsLatitude'            => 'nullable', // Removed |required to test
+                    'GpsLongitude'           => 'nullable',
+                    'GpsAltitude'            => 'nullable',
                     'GpsTimestamp'           => 'required|date',
                     'SchoolAccountantDetails'=> 'required|string',
                 ]);
@@ -1249,52 +831,36 @@ class MobileController extends Controller
 
                 $statusId = $paymentStatusMap[$item['PaymentStatus']] ?? $paymentStatusMap['DEFAULT'];
 
+                //new try
                 try {
                     DB::beginTransaction();
 
-                    // Check if record already exists
-                    $existing = DB::table('beneficiary_transaction_status')
-                        ->where('transaction_id', $item['TransactionId'])
-                        ->first();
+                    // 🔥 Define payment request ID (hardcoded for now)
+                    $paymentRequestId = 'KGS/PAY/REQ/2026/0001';
 
-                    // test logging
+                    // 🔥 Logging (kept)
                     Log::info($item['TransactionId'] . ": Lat: ".$item['GpsLatitude']." Long: ".$item['GpsLongitude']." Alt: ". $item['GpsAltitude']);
 
-                    if ($existing) {
-                        // Update existing record
-                        DB::table('beneficiary_transaction_status')
-                            ->where('transaction_id', $item['TransactionId'])
-                            ->update([
-                                'beneficiary_no' => $item['BeneficiaryNo'],
-                                'payment_status' => $item['PaymentStatus'],
-                                'payment_status_id' => $statusId,
-                                'images' => implode(',', $item['ImageIDs']),
-                                'date_received' => $item['DateReceived'],
-                                'gps_latitude' => $item['GpsLatitude'],
-                                'gps_longitude' => $item['GpsLongitude'],
-                                'gps_altitude' => $item['GpsAltitude'],
-                                'gps_timestamp' => (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s'),
-                                'school_accountant_details' => $item['SchoolAccountantDetails'],
-                                'updated_at' => now(),
-                            ]);
-                    } else {
-                        // Insert new record
-                        DB::table('beneficiary_transaction_status')->insert([
-                            'transaction_id' => $item['TransactionId'],
-                            'beneficiary_no' => $item['BeneficiaryNo'],
-                            'payment_status' => $item['PaymentStatus'],
-                            'payment_status_id' => $statusId,
-                            'images' => implode(',', $item['ImageIDs']),
-                            'date_received' => $item['DateReceived'],
-                            'gps_latitude' => $item['GpsLatitude'],
-                            'gps_longitude' => $item['GpsLongitude'],
-                            'gps_altitude' => $item['GpsAltitude'],
-                            'gps_timestamp' => (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s'),
-                            'school_accountant_details' => $item['SchoolAccountantDetails'],
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                    }
+                    // 🔥 ALWAYS INSERT (no duplicate check)
+                    DB::table('sa_app_beneficiary_transaction_status')->insert([
+                        'payment_request_id' => $paymentRequestId, // ✅ NEW FIELD
+
+                        'transaction_id' => $item['TransactionId'],
+                        'beneficiary_no' => $item['BeneficiaryNo'],
+                        'payment_status' => $item['PaymentStatus'],
+                        'payment_status_id' => $statusId,
+                        'images' => implode(',', $item['ImageIDs']),
+                        'date_received' => $item['DateReceived'],
+                        'gps_latitude'  => $item['GpsLatitude'] ?? null,
+                        'gps_longitude' => $item['GpsLongitude'] ?? null,
+                        'gps_altitude'  => $item['GpsAltitude'] ?? null,
+                        'gps_timestamp' => !empty($item['GpsTimestamp']) 
+                        ? (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s') 
+                        : null,
+                        'school_accountant_details' => $item['SchoolAccountantDetails'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
 
                     // Log user activity
                     DB::table('sa_user_activity_logs')->insert([
@@ -1305,7 +871,7 @@ class MobileController extends Controller
                         'created_at'    => now(),
                     ]);
 
-                    // Update related table
+                    // Update related table (still fine to keep)
                     DB::table('sa_app_beneficiary_list_5')
                         ->where('transaction_id', $item['TransactionId'])
                         ->update([
@@ -1333,7 +899,7 @@ class MobileController extends Controller
                 ]);
                 return response()->json([
                     'Message' => 'Some records failed to process',
-                    // 'Errors' => $errors,
+                    'Errors' => $errors,
                     'SuccessCount' => $successCount
                 ], 422);
             }
@@ -1479,12 +1045,9 @@ class MobileController extends Controller
         }
     }
 
-    //beneficiary images
-    public function beneficiaryImages(Request $request)
+    //beneficiary images(decommisioned on 4 apr 2026)
+    public function beneficiaryImagesv2(Request $request)
     {
-        return response()->json([
-            'message' => 'This feature is currently under maintenance. Please try again later.'
-        ], 503);
         try {
             // === 1) Bearer token validation ===
             $authorizationHeader = $request->header('Authorization');
@@ -1607,6 +1170,180 @@ class MobileController extends Controller
         }
     }
 
+    public function beneficiaryImages(Request $request)
+    {
+        try {
+            // === 1) Bearer token validation ===
+            $authorizationHeader = $request->header('Authorization');
+
+            if (empty($authorizationHeader) || !preg_match('/Bearer\s+(.*)$/i', $authorizationHeader, $matches)) {
+                return response()->json(['error' => 'Bearer token is required'], 401);
+            }
+
+            $token = trim($matches[1]);
+
+            $tokenRecord = DB::table('sa_app_token_management')
+                ->where('token', $token)
+                ->first();
+
+            if (!$tokenRecord) {
+                return response()->json(['error' => 'Invalid token. Please log in again.'], 403);
+            }
+
+            if (!empty($tokenRecord->expires_at) && now()->greaterThan($tokenRecord->expires_at)) {
+                return response()->json(['error' => 'Token has expired. Please log in again.'], 403);
+            }
+
+            $userUuid = $tokenRecord->user_uuid;
+
+            // === 2) District param ===
+            $district = $request->query('district');
+            if (empty($district)) {
+                return response()->json(['error' => 'The district parameter is required'], 400);
+            }
+
+            $data = $request->json()->all();
+            if (!is_array($data) || empty($data)) {
+                return response()->json(['error' => 'Request body must contain image records'], 400);
+            }
+
+            $insertedRecordsCount = 0;
+            $errors = [];
+
+            foreach ($data as $index => $item) {
+
+                $validator = Validator::make($item, [
+                    'BeneficiaryNumber' => 'required|string',
+                    'ImageId'           => 'required|string',
+                    'ImageUrl'          => 'required|string',
+                    'ImageCategory'     => 'required|integer|in:1,2,3,4,5,6',
+                    'ImageDescription'  => 'nullable|string',
+                ]);
+
+                if ($validator->fails()) {
+                    $errors[$index] = $validator->errors()->all();
+                    continue;
+                }
+
+                // Validate base64
+                $decoded = base64_decode($item['ImageUrl'], true);
+                if ($decoded === false) {
+                    $errors[$index][] = 'Invalid base64 image';
+                    continue;
+                }
+
+                $imageSize = strlen($decoded) / 1024;
+
+                try {
+
+                    // 🔥 SAVE IMAGE TO FILE SYSTEM
+                    $imagePath = $this->saveSchoolAppImage(
+                        $item['ImageUrl'],
+                        $item['BeneficiaryNumber']
+                    );
+
+                    // 🔥 STORE PATH IN DB (NOT BASE64)
+                    DB::table('sa_app_beneficiary_images_new')->insert([
+                        'beneficiary_number' => $item['BeneficiaryNumber'],
+                        'image_id'           => $item['ImageId'],
+                        'image_category'     => (int) $item['ImageCategory'],
+                        'image_description'  => $item['ImageDescription'] ?? null,
+                        'image_url'          => $imagePath, // ✅ FILE PATH
+                        'image_size_kb'      => $imageSize,
+                        'created_at'         => now(),
+                        'updated_at'         => now(),
+                    ]);
+
+                    $insertedRecordsCount++;
+
+                } catch (\Throwable $e) {
+                    $errors[$index][] = 'Failed to process image: ' . $e->getMessage();
+                }
+            }
+
+            if (!empty($errors)) {
+                return response()->json([
+                    'message' => 'Some records failed',
+                    'inserted_records' => $insertedRecordsCount,
+                ], 422);
+            }
+
+            // Activity log
+            DB::table('sa_user_activity_logs')->insert([
+                'user_uuid'    => $userUuid,
+                'activity_type'=> 'uploaded beneficiary images',
+                'ip_address'   => $request->ip(),
+                'user_agent'   => $request->header('User-Agent'),
+                'created_at'   => now(),
+            ]);
+
+            return response()->json([
+                'message' => $insertedRecordsCount . ' image records saved successfully'
+            ], 201);
+
+        } catch (\Exception $e) {
+
+            Log::error('Beneficiary image upload failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Server error while processing request',
+            ], 500);
+        }
+    }
+
+    private function saveSchoolAppImage($base64Image, $beneficiaryNumber)
+    {
+        try {
+            if (empty($base64Image)) {
+                throw new \Exception("Empty base64 image provided");
+            }
+
+            $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
+
+            $imageData = base64_decode($base64Image, true);
+
+            if ($imageData === false) {
+                throw new \Exception("Invalid base64 image data");
+            }
+
+            $year  = date('Y');
+            $month = date('m');
+
+            $fileName = "img{$beneficiaryNumber}_{$year}_{$month}_" . uniqid() . ".jpg";
+
+            $folder = 'sch_acc_app_images';
+
+            $directory = public_path("img/{$folder}");
+
+            // 🔥 STRICT CHECK (no creation)
+            if (!is_dir($directory)) {
+                throw new \Exception("Directory does not exist: {$directory}");
+            }
+
+            $filePath = $directory . '/' . $fileName;
+
+            $bytesWritten = file_put_contents($filePath, $imageData);
+
+            if ($bytesWritten === false) {
+                throw new \Exception("Failed to write image to disk: {$filePath}");
+            }
+
+            return "/img/{$folder}/{$fileName}";
+
+        } catch (\Exception $e) {
+
+            \Log::error("saveSchoolAppImage failed", [
+                'beneficiary_number' => $beneficiaryNumber,
+                'directory' => $directory ?? null,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
+        }
+    }
+
 
     //submit deposit slip
     public function submitDepositSlip(Request $request)
@@ -1660,11 +1397,17 @@ class MobileController extends Controller
             // === 4) Save Deposit Slip Submission ===
             DB::beginTransaction();
 
+            
+            $depositSlipPath = $this->saveDepositSlipImage(
+                $data['deposit_slip_image'],
+                $paymentBatchId
+            );
+
             DB::table('sa_app_deposit_slip_submissions')->insert([
                 'PaymentBatchID'   => $paymentBatchId,
                 'UserUUID'         => $userUuid,
-                'DepositSlipImage' => $data['deposit_slip_image'],
-                'ExpectedAmount'  => $data['amount_deposited'],
+                'DepositSlipImage' => $depositSlipPath,
+                'ExpectedAmount'   => $data['expected_amount'],
                 'AmountDeposited'  => $data['amount_deposited'],
                 'Comments'         => $data['comments'] ?? null,
                 'DateSubmitted'    => now(),
@@ -1702,6 +1445,57 @@ class MobileController extends Controller
                 'message' => 'Server error while submitting deposit slip',
                 // 'error'   => $e->getMessage(),
             ], 500);
+        }
+    }
+    private function saveDepositSlipImage($base64Image, $paymentBatchId)
+    {
+        try {
+            if (empty($base64Image)) {
+                throw new \Exception("Empty base64 image provided");
+            }
+
+            // Remove base64 header
+            $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
+
+            $imageData = base64_decode($base64Image, true);
+
+            if ($imageData === false) {
+                throw new \Exception("Invalid base64 image data");
+            }
+
+            $year  = date('Y');
+            $month = date('m');
+
+            $fileName = "deposit_{$paymentBatchId}_{$year}_{$month}_" . uniqid() . ".jpg";
+
+            $folder = 'deposit_slips';
+
+            $directory = public_path("img/{$folder}");
+
+            // 🔒 STRICT CHECK (no folder creation)
+            if (!is_dir($directory)) {
+                throw new \Exception("Deposit slips folder missing: {$directory}");
+            }
+
+            $filePath = $directory . '/' . $fileName;
+
+            $bytesWritten = file_put_contents($filePath, $imageData);
+
+            if ($bytesWritten === false) {
+                throw new \Exception("Failed to write deposit slip image");
+            }
+
+            // Return relative path
+            return "/img/{$folder}/{$fileName}";
+
+        } catch (\Exception $e) {
+
+            \Log::error("saveDepositSlipImage failed", [
+                'payment_batch_id' => $paymentBatchId,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
         }
     }
 
