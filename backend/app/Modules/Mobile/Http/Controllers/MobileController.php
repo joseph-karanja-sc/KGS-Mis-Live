@@ -1213,11 +1213,17 @@ class MobileController extends Controller
             // === 4) Save Deposit Slip Submission ===
             DB::beginTransaction();
 
+            
+            $depositSlipPath = $this->saveDepositSlipImage(
+                $data['deposit_slip_image'],
+                $paymentBatchId
+            );
+
             DB::table('sa_app_deposit_slip_submissions')->insert([
                 'PaymentBatchID'   => $paymentBatchId,
                 'UserUUID'         => $userUuid,
-                'DepositSlipImage' => $data['deposit_slip_image'],
-                'ExpectedAmount'  => $data['amount_deposited'],
+                'DepositSlipImage' => $depositSlipPath,
+                'ExpectedAmount'   => $data['expected_amount'],
                 'AmountDeposited'  => $data['amount_deposited'],
                 'Comments'         => $data['comments'] ?? null,
                 'DateSubmitted'    => now(),
@@ -1255,6 +1261,57 @@ class MobileController extends Controller
                 'message' => 'Server error while submitting deposit slip',
                 // 'error'   => $e->getMessage(),
             ], 500);
+        }
+    }
+    private function saveDepositSlipImage($base64Image, $paymentBatchId)
+    {
+        try {
+            if (empty($base64Image)) {
+                throw new \Exception("Empty base64 image provided");
+            }
+
+            // Remove base64 header
+            $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
+
+            $imageData = base64_decode($base64Image, true);
+
+            if ($imageData === false) {
+                throw new \Exception("Invalid base64 image data");
+            }
+
+            $year  = date('Y');
+            $month = date('m');
+
+            $fileName = "deposit_{$paymentBatchId}_{$year}_{$month}_" . uniqid() . ".jpg";
+
+            $folder = 'deposit_slips';
+
+            $directory = public_path("img/{$folder}");
+
+            // 🔒 STRICT CHECK (no folder creation)
+            if (!is_dir($directory)) {
+                throw new \Exception("Deposit slips folder missing: {$directory}");
+            }
+
+            $filePath = $directory . '/' . $fileName;
+
+            $bytesWritten = file_put_contents($filePath, $imageData);
+
+            if ($bytesWritten === false) {
+                throw new \Exception("Failed to write deposit slip image");
+            }
+
+            // Return relative path
+            return "/img/{$folder}/{$fileName}";
+
+        } catch (\Exception $e) {
+
+            \Log::error("saveDepositSlipImage failed", [
+                'payment_batch_id' => $paymentBatchId,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
         }
     }
 
