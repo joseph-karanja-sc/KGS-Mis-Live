@@ -144,8 +144,7 @@ class MobileController extends Controller
     //login
     public function login(Request $request)
     {
-        
-        // Enforce JSON-only API contract
+        // 1) Enforce json-only api contract
         if (!$request->expectsJson()) {
             return response()->json([
                 'Message' => 'Unsupported media type. JSON requests only.',
@@ -153,7 +152,7 @@ class MobileController extends Controller
             ], 415);
         }
 
-        // Manual validation (NO $request->validate())
+        // 2) Manual validation (no $request->validate())
         $validator = \Validator::make($request->all(), [
             'Email'    => 'required|string',
             'Password' => 'required|string',
@@ -169,10 +168,11 @@ class MobileController extends Controller
 
         $validatedData = $validator->validated();
 
-        // Call upstream MIS login API
+        // 3) Call upstream mis login api
         try {
             $client = new \GuzzleHttp\Client([
-                'base_uri' => config('app.pg_base_url') . '/api/',
+                // 'base_uri' => config('app.pg_base_url') . '/api/',
+                'base_uri' => 'https://kgsmis.edu.gov.zm/api/',
                 'timeout'  => 15,
             ]);
 
@@ -209,7 +209,7 @@ class MobileController extends Controller
             ], $httpStatus);
         }
 
-        // Handle upstream error codes cleanly
+        // 4) Handle upstream error codes cleanly
         $code            = (int) ($payload['code'] ?? $httpStatus);
         $externalMessage = $payload['message'] ?? null;
 
@@ -234,7 +234,7 @@ class MobileController extends Controller
             ], ($code >= 100 && $code < 600) ? $code : 400);
         }
 
-        // Extract user + access checks
+        // 5) Extract user + access checks
         $apiUser = $payload['user'] ?? null;
         $userId  = is_array($apiUser)
             ? ($apiUser['user_id'] ?? $apiUser['id'] ?? null)
@@ -260,7 +260,7 @@ class MobileController extends Controller
             ], 403);
         }
 
-        // Fetch local MIS user
+        // 6) Fetch local mis user
         $kgsMisUser = \DB::table('users')
             ->where('id', $userId)
             ->select(\DB::raw('uuid, decrypt(email) AS email'))
@@ -273,7 +273,7 @@ class MobileController extends Controller
             ], 404);
         }
 
-        // Token generation + persistence
+        // 7) Token generation + persistence
         $tokenString = \Illuminate\Support\Str::random(80);
 
         \DB::table('sa_app_token_management')->insert([
@@ -294,7 +294,7 @@ class MobileController extends Controller
             ]
         );
 
-        // Activity logging
+        // 8) Activity logging
         \DB::table('sa_user_activity_logs')->insert([
             'user_uuid'     => $kgsMisUser->uuid,
             'activity_type' => 'login',
@@ -303,18 +303,26 @@ class MobileController extends Controller
             'created_at'    => now(),
         ]);
 
-        // Load app-specific assignments
-        $ppmAppUser = \DB::table('sa_app_user_details')
-            ->where('user_id', $userId)
-            ->select(
-                'district_assigned_string',
-                'school_assigned_string',
-                'school_cwac_string',
-                'zonal_accountant'
-            )
-            ->first();
+        // 9) Load assignments from new ppm tables
+        // get schools assigned
+        $schoolsData = \DB::table('ppmuserssetup_allocated_schools as t2')
+            ->where('t2.ppm_user_detail_id', $ppmUser->id)
+            ->select('t2.school_name', 't2.cwac_name')
+            ->get();
 
-        // Final JSON response (locked & safe)
+        // split into separate arrays
+        $schools = $schoolsData->pluck('school_name')->toArray();
+        $cwacs   = $schoolsData->pluck('cwac_name')->toArray();
+
+        // get districts assigned
+        $district = \DB::table('ppmuserssetup_allocated_districts as t3')
+            ->where('t3.ppm_user_detail_id', $ppmUser->id)
+            ->value('t3.district_name');
+
+        // determine zonal flag from account_type
+        $isZonal = ($ppmUser->account_type === 'zonal_accountant') ? 1 : 0;
+
+        // 10) Final json response
         return response()
             ->json([
                 'access_token' => $tokenString,
