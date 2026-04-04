@@ -4519,11 +4519,8 @@ class ParametersController extends BaseController
     public function getUsersForApp(Request $request)
     {
         return response()->json([
-<<<<<<< HEAD
             'success' => true,
-=======
             'success' => false,
->>>>>>> origin/main
             'message' => 'Bro, this function was migrated to the MIS',
             'results' => []
         ]);
@@ -4579,19 +4576,11 @@ class ParametersController extends BaseController
     public function updateUsersForApp(Request $request)
     {
         return response()->json([
-<<<<<<< HEAD
-            'success' => true,
-=======
             'success' => false,
->>>>>>> origin/main
             'message' => 'Bro, this function was migrated to the MIS',
             'results' => []
         ]);
         // the return was added to disable the mobile app admin functions since it was added on the MIS
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/main
         $payload = $request->input('users'); // Array of user updates
 
         if (!is_array($payload) || empty($payload)) {

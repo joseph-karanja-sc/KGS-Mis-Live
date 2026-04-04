@@ -861,8 +861,8 @@ class MobileController extends Controller
         }
     }
 
-    //beneficiary images
-    public function beneficiaryImages(Request $request)
+    //beneficiary images(decommisioned on 4 apr 2026)
+    public function beneficiaryImagesv2(Request $request)
     {
         try {
             // === 1) Bearer token validation ===
@@ -982,6 +982,129 @@ class MobileController extends Controller
             return response()->json([
                 'error' => 'Server error while processing request',
                 // 'details' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function beneficiaryImages(Request $request)
+    {
+        try {
+            // === 1) Bearer token validation ===
+            $authorizationHeader = $request->header('Authorization');
+
+            if (empty($authorizationHeader) || !preg_match('/Bearer\s+(.*)$/i', $authorizationHeader, $matches)) {
+                return response()->json(['error' => 'Bearer token is required'], 401);
+            }
+
+            $token = trim($matches[1]);
+
+            $tokenRecord = DB::table('sa_app_token_management')
+                ->where('token', $token)
+                ->first();
+
+            if (!$tokenRecord) {
+                return response()->json(['error' => 'Invalid token. Please log in again.'], 403);
+            }
+
+            if (!empty($tokenRecord->expires_at) && now()->greaterThan($tokenRecord->expires_at)) {
+                return response()->json(['error' => 'Token has expired. Please log in again.'], 403);
+            }
+
+            $userUuid = $tokenRecord->user_uuid;
+
+            // === 2) District param ===
+            $district = $request->query('district');
+            if (empty($district)) {
+                return response()->json(['error' => 'The district parameter is required'], 400);
+            }
+
+            $data = $request->json()->all();
+            if (!is_array($data) || empty($data)) {
+                return response()->json(['error' => 'Request body must contain image records'], 400);
+            }
+
+            $insertedRecordsCount = 0;
+            $errors = [];
+
+            foreach ($data as $index => $item) {
+
+                $validator = Validator::make($item, [
+                    'BeneficiaryNumber' => 'required|string',
+                    'ImageId'           => 'required|string',
+                    'ImageUrl'          => 'required|string',
+                    'ImageCategory'     => 'required|integer|in:1,2,3,4,5,6',
+                    'ImageDescription'  => 'nullable|string',
+                ]);
+
+                if ($validator->fails()) {
+                    $errors[$index] = $validator->errors()->all();
+                    continue;
+                }
+
+                // Validate base64
+                $decoded = base64_decode($item['ImageUrl'], true);
+                if ($decoded === false) {
+                    $errors[$index][] = 'Invalid base64 image';
+                    continue;
+                }
+
+                $imageSize = strlen($decoded) / 1024;
+
+                try {
+
+                    // 🔥 SAVE IMAGE TO FILE SYSTEM
+                    $imagePath = $this->saveSchoolAppImage(
+                        $item['ImageUrl'],
+                        $item['BeneficiaryNumber']
+                    );
+
+                    // 🔥 STORE PATH IN DB (NOT BASE64)
+                    DB::table('sa_app_beneficiary_images')->insert([
+                        'beneficiary_number' => $item['BeneficiaryNumber'],
+                        'image_id'           => $item['ImageId'],
+                        'image_category'     => (int) $item['ImageCategory'],
+                        'image_description'  => $item['ImageDescription'] ?? null,
+                        'image_url'          => $imagePath, // ✅ FILE PATH
+                        'image_size_kb'      => $imageSize,
+                        'created_at'         => now(),
+                        'updated_at'         => now(),
+                    ]);
+
+                    $insertedRecordsCount++;
+
+                } catch (\Throwable $e) {
+                    $errors[$index][] = 'Failed to process image: ' . $e->getMessage();
+                }
+            }
+
+            if (!empty($errors)) {
+                return response()->json([
+                    'message' => 'Some records failed',
+                    'inserted_records' => $insertedRecordsCount,
+                ], 422);
+            }
+
+            // Activity log
+            DB::table('sa_user_activity_logs')->insert([
+                'user_uuid'    => $userUuid,
+                'activity_type'=> 'uploaded beneficiary images',
+                'ip_address'   => $request->ip(),
+                'user_agent'   => $request->header('User-Agent'),
+                'created_at'   => now(),
+            ]);
+
+            return response()->json([
+                'message' => $insertedRecordsCount . ' image records saved successfully'
+            ], 201);
+
+        } catch (\Exception $e) {
+
+            Log::error('Beneficiary image upload failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Server error while processing request',
             ], 500);
         }
     }
