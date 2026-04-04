@@ -5714,7 +5714,7 @@ class MobileController extends Controller
          *  - Versioned beneficiary tables do NOT leak into business logic
          */
 
-        $rows = DB::table('beneficiary_transaction_status as t1')
+        $rows = DB::table('sa_app_beneficiary_transaction_status as t1')
 
             // Older beneficiary snapshot
             ->leftJoin(
