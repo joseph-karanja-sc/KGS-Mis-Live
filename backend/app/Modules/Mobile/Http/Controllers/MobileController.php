@@ -5693,7 +5693,7 @@ class MobileController extends Controller
         ]);
     }
 
-    public function getSchoolTransactionSummary()
+    public function getSchoolTransactionSummaryv2()
     {
         /**
          * STEP 1:
@@ -5726,7 +5726,7 @@ class MobileController extends Controller
 
             // Newer beneficiary snapshot
             ->leftJoin(
-                'sa_app_beneficiary_list_5 as b4',
+                'sa_app_beneficiary_list_4 as b4',
                 'b4.beneficiary_no',
                 '=',
                 't1.beneficiary_no'
@@ -5774,6 +5774,105 @@ class MobileController extends Controller
             if (!$school) continue;
 
             // Fetch district info
+            $district = DB::table('districts')->where('id', $school->district_id)->first();
+
+            $beneficiaryList = [];
+
+            foreach ($beneficiaries as $b) {
+                $beneficiaryList[] = [
+                    "beneficiary_id"            => $b->beneficiary_id,
+                    "beneficiary_no"            => $b->beneficiary_no,
+                    "grant_amount"              => $b->grant_amount,
+                    "first_name"                => $b->first_name,
+                    "last_name"                 => $b->last_name,
+                    "hhh_fname"                 => $b->hhh_fname,
+                    "hhh_lname"                 => $b->hhh_lname,
+                    "hhh_nrc_number"            => $b->hhh_nrc_number,
+                    "payment_status"            => $b->payment_status,
+                    "images"                    => $b->images,
+                    "school_accountant_details" => $b->school_accountant_details,
+                    "gps_latitude"              => $b->gps_latitude,
+                    "gps_longitude"             => $b->gps_longitude,
+                    "gps_altitude"              => $b->gps_altitude,
+                    "date_received"             => $b->date_received
+                ];
+            }
+
+            $schoolsArray[] = [
+                "school_name"         => $school->name,
+                "school_district"     => $district->name ?? '',
+                "school_emis"         => $school->code,
+                "total_beneficiaries" => count($beneficiaryList),
+                "beneficiaries"       => $beneficiaryList
+            ];
+        }
+
+        return response()->json([
+            "status"        => true,
+            "total_schools" => count($schoolsArray),
+            "schools"       => $schoolsArray
+        ]);
+    }
+
+    public function getSchoolTransactionSummary()
+    {
+        /**
+         * STEP 1:
+         * Fetch transaction records AFTER the given date
+         * Join ONLY sa_app_beneficiary_list_5
+         */
+
+        $rows = DB::table('sa_app_beneficiary_transaction_status as t1')
+
+            ->leftJoin(
+                'sa_app_beneficiary_list_5 as b5',
+                'b5.beneficiary_no',
+                '=',
+                't1.beneficiary_no'
+            )
+
+            ->where('t1.date_received', '>', '2025-12-01')
+
+            ->select(
+                't1.*',
+
+                // Direct fields from b5 (no COALESCE needed)
+                'b5.beneficiary_id',
+                'b5.beneficiary_no',
+                'b5.first_name',
+                'b5.last_name',
+                'b5.grant_amount',
+                'b5.hhh_fname',
+                'b5.hhh_lname',
+                'b5.hhh_nrc_number',
+                'b5.school_id'
+            )
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return response()->json([
+                "status"  => false,
+                "message" => "No records found after filtering by date_received > 2025-12-01"
+            ], 404);
+        }
+
+        /**
+         * STEP 2:
+         * Group by school_id
+         */
+        $groupedBySchool = $rows->groupBy('school_id');
+
+        $schoolsArray = [];
+
+        foreach ($groupedBySchool as $schoolId => $beneficiaries) {
+
+            if (empty($schoolId)) continue; // skip invalid joins
+
+            // Fetch school info
+            $school = DB::table('school_information')->where('id', $schoolId)->first();
+            if (!$school) continue;
+
+            // Fetch district
             $district = DB::table('districts')->where('id', $school->district_id)->first();
 
             $beneficiaryList = [];
@@ -5913,6 +6012,7 @@ class MobileController extends Controller
             'images' => $images
         ]);
     }
+
 
     public function migrateBeneficiariesToReport()
     {
