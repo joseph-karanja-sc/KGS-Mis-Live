@@ -326,6 +326,7 @@
                 <th>Ref No</th>
                 <th>Phase</th>
                 <th>Status</th>
+                <th>Result Code</th>
                 <th>HTTP</th>
                 <th>Created</th>
                 <th></th>
@@ -374,7 +375,7 @@
 
 <script>
 /* Load transactions list */
-async function loadTransactions() {
+async function loadTransactions1() {
 
     let params = {
         payment_ref_no : document.getElementById("fRefNo").value.trim(),
@@ -430,6 +431,75 @@ async function loadTransactions() {
     console.log("JSON:", json);
 
 }
+
+async function loadTransactions(customUrl = null) {
+
+    let params = {
+        payment_ref_no : document.getElementById("fRefNo").value.trim(),
+        payment_phase  : document.getElementById("fPhase").value,
+        status         : document.getElementById("fStatus").value,
+        search         : document.getElementById("fSearch").value.trim(),
+    };
+
+    let url = customUrl ?? "/api/zispis/v1/pg/transactions?" + new URLSearchParams(params);
+
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const tbody = document.querySelector("#pgTable tbody");
+    tbody.innerHTML = "";
+
+    if (!json.status || json.data.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='9' style='text-align:center'>No data</td></tr>";
+        return;
+    }
+
+    json.data.forEach(row => {
+
+        let badgeClass =
+            row.pg_status === "success" ? "success" :
+            row.pg_status === "failed"  ? "failed" :
+            row.pg_status === "error"   ? "error"   : "pending";
+
+        let badge = `<span class="badge ${badgeClass}">${row.pg_status}</span>`;
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${row.transaction_id}</td>
+                <td>${row.school_name ?? "-"}</td>
+                <td>${row.payment_ref_no}</td>
+                <td>${row.payment_phase}</td>
+                <td>${badge}</td>
+                <td>${row.result_code ?? "-"}</td>
+                <td>${row.http_status ?? "-"}</td>
+                <td>${row.created_at}</td>
+                <td>
+                    <button onclick="viewTxn('${row.transaction_id}')">Inspect</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    renderPagination(json.pagination);
+}
+
+function renderPagination(pagination) {
+
+    let html = "";
+
+    if (pagination.prev_page) {
+        html += `<button onclick="loadTransactions('${pagination.prev_page}')">Prev</button>`;
+    }
+
+    html += ` Page ${pagination.current_page} of ${pagination.last_page} `;
+
+    if (pagination.next_page) {
+        html += `<button onclick="loadTransactions('${pagination.next_page}')">Next</button>`;
+    }
+
+    document.getElementById("pagination").innerHTML = html;
+}
+
 
 /* View Transaction Modal */
 async function viewTxn(txnId) {

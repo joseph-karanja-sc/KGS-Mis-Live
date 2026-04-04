@@ -140,237 +140,12 @@ class MobileController extends Controller
 
 
 
-    // functions for School accountant app are below (added by joseph oct 2025)
+    // functions for School accountant app are below (added by joseph oct 2025)(updated 30-mar-26)
     //login
-
-    public function loginv1(Request $request)
-    {
-        /*
-        |--------------------------------------------------------------------------
-        | 1) Enforce JSON-only API contract
-        |--------------------------------------------------------------------------
-        */
-        if (!$request->expectsJson()) {
-            return response()->json([
-                'Message' => 'Unsupported media type. JSON requests only.',
-                'Code'    => 415,
-            ], 415);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | 2) Manual validation (NO $request->validate())
-        |--------------------------------------------------------------------------
-        */
-        $validator = \Validator::make($request->all(), [
-            'Email'    => 'required|string',
-            'Password' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'Message' => 'Validation failed.',
-                'Errors'  => $validator->errors(),
-                'Code'    => 422,
-            ], 422);
-        }
-
-        $validatedData = $validator->validated();
-
-        /*
-        |--------------------------------------------------------------------------
-        | 3) Call upstream MIS login API
-        |--------------------------------------------------------------------------
-        */
-        try {
-            $client = new \GuzzleHttp\Client([
-                'base_uri' => config('app.pg_base_url') . '/api/',
-                'timeout'  => 15,
-            ]);
-
-            $response = $client->post('api-login', [
-                'json' => [
-                    'email'       => $validatedData['Email'],
-                    'password'    => $validatedData['Password'],
-                    'remember_me' => 1,
-                ],
-                'headers' => [
-                    'Accept'       => 'application/json',
-                    'Content-Type' => 'application/json',
-                ],
-            ]);
-
-            $httpStatus = $response->getStatusCode();
-            $payload    = json_decode((string) $response->getBody(), true) ?: [];
-
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-
-            $httpStatus = $e->hasResponse()
-                ? $e->getResponse()->getStatusCode()
-                : 502;
-
-            // Log upstream response internally (never expose to client)
-            \Log::error('MIS Login Error', [
-                'status' => $httpStatus,
-                'body'   => $e->hasResponse() ? (string) $e->getResponse()->getBody() : null,
-            ]);
-
-            return response()->json([
-                'Message' => 'Authentication service unavailable. Please try again later.',
-                'Code'    => $httpStatus,
-            ], $httpStatus);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | 4) Handle upstream error codes cleanly
-        |--------------------------------------------------------------------------
-        */
-        $code            = (int) ($payload['code'] ?? $httpStatus);
-        $externalMessage = $payload['message'] ?? null;
-
-        if ($code !== 200) {
-            switch ($code) {
-                case 404:
-                    $friendlyMessage = "We couldn't find an account with that email address.";
-                    break;
-                case 403:
-                    $friendlyMessage = "This account has been blocked. Please contact support.";
-                    break;
-                case 401:
-                    $friendlyMessage = "Incorrect credentials or too many failed attempts.";
-                    break;
-                default:
-                    $friendlyMessage = "Login failed. Please try again.";
-            }
-
-            return response()->json([
-                'Message' => $friendlyMessage,
-                'Code'    => $code,
-            ], ($code >= 100 && $code < 600) ? $code : 400);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | 5) Extract user + access checks
-        |--------------------------------------------------------------------------
-        */
-        $apiUser = $payload['user'] ?? null;
-        $userId  = is_array($apiUser)
-            ? ($apiUser['user_id'] ?? $apiUser['id'] ?? null)
-            : null;
-
-        if (!$userId) {
-            return response()->json([
-                'Message' => 'Login successful but user identifier missing.',
-                'Code'    => 422,
-            ], 422);
-        }
-
-        if (!empty($apiUser['has_ppm_app_access']) && $apiUser['has_ppm_app_access'] == 0) {
-            return response()->json([
-                'Message' => 'You do not have access to the School Accountant App.',
-                'Code'    => 403,
-            ], 403);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | 6) Fetch local MIS user
-        |--------------------------------------------------------------------------
-        */
-        $kgsMisUser = \DB::table('users')
-            ->where('id', $userId)
-            ->select(\DB::raw('uuid, decrypt(email) AS email'))
-            ->first();
-
-        if (!$kgsMisUser) {
-            return response()->json([
-                'Message' => 'User authenticated but not found in MIS.',
-                'Code'    => 404,
-            ], 404);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | 7) Token generation + persistence
-        |--------------------------------------------------------------------------
-        */
-        $tokenString = \Illuminate\Support\Str::random(80);
-
-        \DB::table('sa_app_token_management')->insert([
-            'user_uuid'  => $kgsMisUser->uuid,
-            'token'      => $tokenString,
-            'expires_at' => now()->addHours(24),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        \DB::table('sa_app_user_management')->updateOrInsert(
-            ['user_id' => $userId],
-            [
-                'access_token' => $tokenString,
-                'API_key'      => \Illuminate\Support\Str::random(40),
-                'updated_at'   => now(),
-                'created_at'   => now(),
-            ]
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | 8) Activity logging
-        |--------------------------------------------------------------------------
-        */
-        \DB::table('sa_user_activity_logs')->insert([
-            'user_uuid'     => $kgsMisUser->uuid,
-            'activity_type' => 'login',
-            'ip_address'    => $request->ip(),
-            'user_agent'    => $request->header('User-Agent'),
-            'created_at'    => now(),
-        ]);
-
-        /*
-        |--------------------------------------------------------------------------
-        | 9) Load app-specific assignments
-        |--------------------------------------------------------------------------
-        */
-        $ppmAppUser = \DB::table('sa_app_user_details')
-            ->where('user_id', $userId)
-            ->select(
-                'district_assigned_string',
-                'school_assigned_string',
-                'school_cwac_string',
-                'zonal_accountant'
-            )
-            ->first();
-
-        /*
-        |--------------------------------------------------------------------------
-        | 10) Final JSON response (locked & safe)
-        |--------------------------------------------------------------------------
-        */
-        return response()
-            ->json([
-                'access_token' => $tokenString,
-                'token_type'   => 'Bearer',
-                'expires_at'   => now()->addHours(24)->toDateTimeString(),
-                'user' => [
-                    'uuid'              => $kgsMisUser->uuid,
-                    'email'             => $kgsMisUser->email,
-                    'district_assigned' => $ppmAppUser->district_assigned_string ?? null,
-                    'school_assigned'   => $ppmAppUser->school_assigned_string ?? null,
-                    'school_cwac'       => $ppmAppUser->school_cwac_string ?? null,
-                    'zonal_accountant'  => $ppmAppUser->zonal_accountant ?? null,
-                ],
-            ], 200)
-            ->header('Content-Type', 'application/json')
-            ->header('X-Content-Type-Options', 'nosniff');
-    }
-
-    //added by jose 25-mar-2026
     public function login(Request $request)
     {
-        // 1) Enforce json-only api contract
+        
+        // Enforce JSON-only API contract
         if (!$request->expectsJson()) {
             return response()->json([
                 'Message' => 'Unsupported media type. JSON requests only.',
@@ -378,7 +153,7 @@ class MobileController extends Controller
             ], 415);
         }
 
-        // 2) Manual validation (no $request->validate())
+        // Manual validation (NO $request->validate())
         $validator = \Validator::make($request->all(), [
             'Email'    => 'required|string',
             'Password' => 'required|string',
@@ -394,7 +169,7 @@ class MobileController extends Controller
 
         $validatedData = $validator->validated();
 
-        // 3) Call upstream mis login api
+        // Call upstream MIS login API
         try {
             $client = new \GuzzleHttp\Client([
                 'base_uri' => config('app.pg_base_url') . '/api/',
@@ -434,7 +209,7 @@ class MobileController extends Controller
             ], $httpStatus);
         }
 
-        // 4) Handle upstream error codes cleanly
+        // Handle upstream error codes cleanly
         $code            = (int) ($payload['code'] ?? $httpStatus);
         $externalMessage = $payload['message'] ?? null;
 
@@ -459,7 +234,7 @@ class MobileController extends Controller
             ], ($code >= 100 && $code < 600) ? $code : 400);
         }
 
-        // 5) Extract user + access checks
+        // Extract user + access checks
         $apiUser = $payload['user'] ?? null;
         $userId  = is_array($apiUser)
             ? ($apiUser['user_id'] ?? $apiUser['id'] ?? null)
@@ -485,7 +260,7 @@ class MobileController extends Controller
             ], 403);
         }
 
-        // 6) Fetch local mis user
+        // Fetch local MIS user
         $kgsMisUser = \DB::table('users')
             ->where('id', $userId)
             ->select(\DB::raw('uuid, decrypt(email) AS email'))
@@ -498,7 +273,7 @@ class MobileController extends Controller
             ], 404);
         }
 
-        // 7) Token generation + persistence
+        // Token generation + persistence
         $tokenString = \Illuminate\Support\Str::random(80);
 
         \DB::table('sa_app_token_management')->insert([
@@ -519,7 +294,7 @@ class MobileController extends Controller
             ]
         );
 
-        // 8) Activity logging
+        // Activity logging
         \DB::table('sa_user_activity_logs')->insert([
             'user_uuid'     => $kgsMisUser->uuid,
             'activity_type' => 'login',
@@ -528,26 +303,18 @@ class MobileController extends Controller
             'created_at'    => now(),
         ]);
 
-        // 9) Load assignments from new ppm tables
-        // get schools assigned
-        $schoolsData = \DB::table('ppmuserssetup_allocated_schools as t2')
-            ->where('t2.ppm_user_detail_id', $ppmUser->id)
-            ->select('t2.school_name', 't2.cwac_name')
-            ->get();
+        // Load app-specific assignments
+        $ppmAppUser = \DB::table('sa_app_user_details')
+            ->where('user_id', $userId)
+            ->select(
+                'district_assigned_string',
+                'school_assigned_string',
+                'school_cwac_string',
+                'zonal_accountant'
+            )
+            ->first();
 
-        // split into separate arrays
-        $schools = $schoolsData->pluck('school_name')->toArray();
-        $cwacs   = $schoolsData->pluck('cwac_name')->toArray();
-
-        // get districts assigned
-        $district = \DB::table('ppmuserssetup_allocated_districts as t3')
-            ->where('t3.ppm_user_detail_id', $ppmUser->id)
-            ->value('t3.district_name');
-
-        // determine zonal flag from account_type
-        $isZonal = ($ppmUser->account_type === 'zonal_accountant') ? 1 : 0;
-
-        // 10) Final json response
+        // Final JSON response (locked & safe)
         return response()
             ->json([
                 'access_token' => $tokenString,
@@ -1094,8 +861,8 @@ class MobileController extends Controller
         }
     }
 
-    //beneficiary images
-    public function beneficiaryImages(Request $request)
+    //beneficiary images(decommisioned on 4 apr 2026)
+    public function beneficiaryImagesv2(Request $request)
     {
         try {
             // === 1) Bearer token validation ===
@@ -1216,6 +983,180 @@ class MobileController extends Controller
                 'error' => 'Server error while processing request',
                 // 'details' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function beneficiaryImages(Request $request)
+    {
+        try {
+            // === 1) Bearer token validation ===
+            $authorizationHeader = $request->header('Authorization');
+
+            if (empty($authorizationHeader) || !preg_match('/Bearer\s+(.*)$/i', $authorizationHeader, $matches)) {
+                return response()->json(['error' => 'Bearer token is required'], 401);
+            }
+
+            $token = trim($matches[1]);
+
+            $tokenRecord = DB::table('sa_app_token_management')
+                ->where('token', $token)
+                ->first();
+
+            if (!$tokenRecord) {
+                return response()->json(['error' => 'Invalid token. Please log in again.'], 403);
+            }
+
+            if (!empty($tokenRecord->expires_at) && now()->greaterThan($tokenRecord->expires_at)) {
+                return response()->json(['error' => 'Token has expired. Please log in again.'], 403);
+            }
+
+            $userUuid = $tokenRecord->user_uuid;
+
+            // === 2) District param ===
+            $district = $request->query('district');
+            if (empty($district)) {
+                return response()->json(['error' => 'The district parameter is required'], 400);
+            }
+
+            $data = $request->json()->all();
+            if (!is_array($data) || empty($data)) {
+                return response()->json(['error' => 'Request body must contain image records'], 400);
+            }
+
+            $insertedRecordsCount = 0;
+            $errors = [];
+
+            foreach ($data as $index => $item) {
+
+                $validator = Validator::make($item, [
+                    'BeneficiaryNumber' => 'required|string',
+                    'ImageId'           => 'required|string',
+                    'ImageUrl'          => 'required|string',
+                    'ImageCategory'     => 'required|integer|in:1,2,3,4,5,6',
+                    'ImageDescription'  => 'nullable|string',
+                ]);
+
+                if ($validator->fails()) {
+                    $errors[$index] = $validator->errors()->all();
+                    continue;
+                }
+
+                // Validate base64
+                $decoded = base64_decode($item['ImageUrl'], true);
+                if ($decoded === false) {
+                    $errors[$index][] = 'Invalid base64 image';
+                    continue;
+                }
+
+                $imageSize = strlen($decoded) / 1024;
+
+                try {
+
+                    // 🔥 SAVE IMAGE TO FILE SYSTEM
+                    $imagePath = $this->saveSchoolAppImage(
+                        $item['ImageUrl'],
+                        $item['BeneficiaryNumber']
+                    );
+
+                    // 🔥 STORE PATH IN DB (NOT BASE64)
+                    DB::table('sa_app_beneficiary_images')->insert([
+                        'beneficiary_number' => $item['BeneficiaryNumber'],
+                        'image_id'           => $item['ImageId'],
+                        'image_category'     => (int) $item['ImageCategory'],
+                        'image_description'  => $item['ImageDescription'] ?? null,
+                        'image_url'          => $imagePath, // ✅ FILE PATH
+                        'image_size_kb'      => $imageSize,
+                        'created_at'         => now(),
+                        'updated_at'         => now(),
+                    ]);
+
+                    $insertedRecordsCount++;
+
+                } catch (\Throwable $e) {
+                    $errors[$index][] = 'Failed to process image: ' . $e->getMessage();
+                }
+            }
+
+            if (!empty($errors)) {
+                return response()->json([
+                    'message' => 'Some records failed',
+                    'inserted_records' => $insertedRecordsCount,
+                ], 422);
+            }
+
+            // Activity log
+            DB::table('sa_user_activity_logs')->insert([
+                'user_uuid'    => $userUuid,
+                'activity_type'=> 'uploaded beneficiary images',
+                'ip_address'   => $request->ip(),
+                'user_agent'   => $request->header('User-Agent'),
+                'created_at'   => now(),
+            ]);
+
+            return response()->json([
+                'message' => $insertedRecordsCount . ' image records saved successfully'
+            ], 201);
+
+        } catch (\Exception $e) {
+
+            Log::error('Beneficiary image upload failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Server error while processing request',
+            ], 500);
+        }
+    }
+
+    private function saveSchoolAppImage($base64Image, $beneficiaryNumber)
+    {
+        try {
+            if (empty($base64Image)) {
+                throw new \Exception("Empty base64 image provided");
+            }
+
+            $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
+
+            $imageData = base64_decode($base64Image, true);
+
+            if ($imageData === false) {
+                throw new \Exception("Invalid base64 image data");
+            }
+
+            $year  = date('Y');
+            $month = date('m');
+
+            $fileName = "img{$beneficiaryNumber}_{$year}_{$month}_" . uniqid() . ".jpg";
+
+            $folder = 'sch_acc_app_images';
+
+            $directory = public_path("img/{$folder}");
+
+            // 🔥 STRICT CHECK (no creation)
+            if (!is_dir($directory)) {
+                throw new \Exception("Directory does not exist: {$directory}");
+            }
+
+            $filePath = $directory . '/' . $fileName;
+
+            $bytesWritten = file_put_contents($filePath, $imageData);
+
+            if ($bytesWritten === false) {
+                throw new \Exception("Failed to write image to disk: {$filePath}");
+            }
+
+            return "/img/{$folder}/{$fileName}";
+
+        } catch (\Exception $e) {
+
+            \Log::error("saveSchoolAppImage failed", [
+                'beneficiary_number' => $beneficiaryNumber,
+                'directory' => $directory ?? null,
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
         }
     }
 
@@ -2703,6 +2644,7 @@ class MobileController extends Controller
                 DB::raw("CONCAT(decrypt(t3.first_name), ' ', decrypt(t3.last_name)) AS prepared_by"),
                 'w.name as workflow_status'
             )
+            ->where('t1.is_active', 1)
             ->get();
 
         return response()->json([
@@ -2920,7 +2862,7 @@ class MobileController extends Controller
             ], 400);
         }
 
-        $rows = DB::table('sa_app_beneficiary_list_3 as t1')
+        $rows = DB::table('sa_app_beneficiary_list_5 as t1')
             ->select(
                 't1.beneficiary_no',
                 't1.first_name',
@@ -4027,7 +3969,7 @@ class MobileController extends Controller
 
 
     //final working functions
-    public function processAllSchoolsForPGOld()
+    public function processAllSchoolsForPG1()
     {
         $batchSize = 1; // process 1 at a time (required by PG)
 
@@ -4113,7 +4055,9 @@ class MobileController extends Controller
             }
         }
     }
-    public function processAllSchoolsForPG(Request $request)
+
+    //pg disbursement main function
+    public function processAllSchoolsForPG2(Request $request)
     {
 
         $payment_ref_no = $request->payment_ref_no;
@@ -4240,67 +4184,493 @@ class MobileController extends Controller
             }
         }
     }
-    private function buildSingleSchoolPayload($school)
+    public function processAllSchoolsForPG3(Request $request)
     {
-        // Ensure the DB has a TID for tracking
-        if (empty($school->transaction_id)) {
-            $tid = "KGSTRIDT-" . Str::uuid()->toString();
+        $payment_ref_no = $request->payment_ref_no;
+        $payment_type   = $request->payment_type; // 'school' or 'district'
 
-            DB::table('grant_pilotschedule_one')
-                ->where('id', $school->id)
-                ->update(['transaction_id' => $tid]);
-
-            $school->transaction_id = $tid;
+        if (!$payment_ref_no || !$payment_type) {
+            return response()->json([
+                "status"  => false,
+                "message" => "payment_ref_no and payment_type are required."
+            ], 400);
         }
 
-        // Extract district name (e.g. "1011-Chisamba" → "Chisamba")
-        $districtName = trim(explode("-", $school->school_district)[1] ?? '');
+        // select correct table
+        if ($payment_type === 'school') {
+            $table = 'pg_school_fee_schedule';
+        } elseif ($payment_type === 'district') {
+            $table = 'pg_district_grant_schedule';
+        } else {
+            return response()->json([
+                "status" => false,
+                "message" => "Invalid payment type"
+            ], 400);
+        }
 
-        // Fetch district ID
-        $districtRow = DB::table('districts')->where('name', $districtName)->first();
-        $districtId  = $districtRow->id ?? 0;
+        $successCount = 0;
+        $failedCount  = 0;
+        $processed    = 0;
 
-        // Fetch bank details for district
-        $bank = DB::table('district_bank_accounts')
-            ->where('district_id', $districtId)
+        while (true) {
+
+            // fetch next unsent record
+            $record = DB::table($table)
+                ->where('is_sent_to_pg', 0)
+                ->where('payment_ref_no', $payment_ref_no)
+                ->orderBy('id')
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    "status"    => true,
+                    "message"   => "Processing completed.",
+                    "processed" => $processed,
+                    "success"   => $successCount,
+                    "failed"    => $failedCount,
+                    "remaining" => DB::table($table)
+                        ->where('is_sent_to_pg', 0)
+                        ->where('payment_ref_no', $payment_ref_no)
+                        ->count()
+                ]);
+            }
+
+            // build payload
+            $payloadItem = $payment_type === 'school'
+                ? $this->buildSchoolPayload($record)
+                : $this->buildDistrictPayload($record);
+
+            // dd($payloadItem);
+
+            $tid = $payloadItem["TransactionID"];
+            $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
+            $headers = $this->preparePGHeaders();
+
+            // dd($headers);
+
+            try {
+
+                $logId = DB::table('pg_payment_logs')->insertGetId([
+                    "payment_ref_no"   => $payment_ref_no,
+                    "transaction_id"   => $tid,
+                    "payment_phase"    => property_exists($record, 'payment_phase') ? $record->payment_phase : 0,
+                    "request_url"      => $url,
+                    "request_payload"  => json_encode($payloadItem),
+                    "headers"          => json_encode($headers),
+                    "status"           => "pending",
+                    "created_at"       => now(),
+                    "updated_at"       => now()
+                ]);
+
+            } catch (\Throwable $e) {
+
+                \Log::error("PG LOG INSERT FAILED", [
+                    "error" => $e->getMessage(),
+                    "payload_size" => strlen(json_encode($payloadItem)),
+                    "headers_size" => strlen(json_encode($headers))
+                ]);
+
+                return response()->json([
+                    "status" => false,
+                    "message" => "Failed to log PG request",
+                    "error" => $e->getMessage()
+                ]);
+            }
+
+            $processed++;
+
+            try {
+
+                $client = new \GuzzleHttp\Client(['verify' => false]);
+
+                $response = $client->post($url, [
+                    'headers'     => $headers,
+                    'json'        => $payloadItem,
+                    'http_errors' => false
+                ]);
+
+                $status = $response->getStatusCode();
+                $body   = $response->getBody()->getContents();
+
+                // update log
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "http_status"   => $status,
+                        "response_body" => $body,
+                        "status"        => $status == 200 ? "success" : "failed",
+                        "updated_at"    => now()
+                    ]);
+
+                if ($status == 200) {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 1]);
+
+                    $successCount++;
+
+                } else {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 2]);
+
+                    $failedCount++;
+                }
+
+            } catch (\Exception $e) {
+
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "status"        => "error",
+                        "response_body" => $e->getMessage(),
+                        "updated_at"    => now()
+                    ]);
+
+                DB::table($table)
+                    ->where('id', $record->id)
+                    ->update(['is_sent_to_pg' => 2]);
+
+                $failedCount++;
+            }
+        }
+    }
+    public function processAllSchoolsForPG(Request $request)
+    {
+        $payment_ref_no = $request->payment_ref_no;
+        $payment_type   = $request->payment_type; // 'school' or 'district'
+
+        if (!$payment_ref_no || !$payment_type) {
+            return response()->json([
+                "status"  => false,
+                "message" => "payment_ref_no and payment_type are required."
+            ], 400);
+        }
+
+        // select correct table
+        if ($payment_type === 'school') {
+            $table = 'pg_school_fee_schedule';
+        } elseif ($payment_type === 'district') {
+            $table = 'pg_district_grant_schedule';
+        } else {
+            return response()->json([
+                "status" => false,
+                "message" => "Invalid payment type"
+            ], 400);
+        }
+
+        $successCount = 0;
+        $failedCount  = 0;
+        $processed    = 0;
+
+        $maxLoops = 500;
+        $loop = 0;
+
+        while ($loop < $maxLoops) {
+            $loop++;
+
+            // fetch next unsent record
+            $record = DB::table($table)
+                ->where('is_sent_to_pg', 0)
+                ->where('payment_ref_no', $payment_ref_no)
+                ->orderBy('id')
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    "status"    => true,
+                    "message"   => "Processing completed.",
+                    "processed" => $processed,
+                    "success"   => $successCount,
+                    "failed"    => $failedCount,
+                    "remaining" => DB::table($table)
+                        ->where('is_sent_to_pg', 0)
+                        ->where('payment_ref_no', $payment_ref_no)
+                        ->count()
+                ]);
+            }
+
+            // build payload
+            $payloadItem = $payment_type === 'school'
+                ? $this->buildSchoolPayload($record)
+                : $this->buildDistrictPayload($record);
+
+            $tid = $payloadItem["TransactionID"];
+            $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
+            $headers = $this->preparePGHeaders();
+
+            // insert log
+            try {
+
+                $logId = DB::table('pg_payment_logs')->insertGetId([
+                    "payment_ref_no"   => $payment_ref_no,
+                    "transaction_id"   => $tid,
+                    "payment_phase"    => property_exists($record, 'payment_phase') ? $record->payment_phase : 0,
+                    "request_url"      => $url,
+                    "request_payload"  => json_encode($payloadItem),
+                    "headers"          => json_encode($headers),
+                    "status"           => "pending",
+                    "created_at"       => now(),
+                    "updated_at"       => now()
+                ]);
+
+            } catch (\Throwable $e) {
+
+                \Log::error("PG LOG INSERT FAILED", [
+                    "error" => $e->getMessage()
+                ]);
+
+                return response()->json([
+                    "status" => false,
+                    "message" => "Failed to log PG request",
+                    "error" => $e->getMessage()
+                ]);
+            }
+
+            $processed++;
+
+            try {
+
+                $client = new \GuzzleHttp\Client([
+                    'verify' => false,
+                    'timeout' => 60
+                ]);
+
+                $response = $client->post($url, [
+                    'headers'     => $headers,
+                    'json'        => $payloadItem,
+                    'http_errors' => false
+                ]);
+
+                $status = $response->getStatusCode();
+                $body   = $response->getBody()->getContents();
+
+                // decode PG response
+                $responseJson = json_decode($body, true);
+
+                if (!$responseJson) {
+                    \Log::error("Invalid PG JSON response", ["body" => $body]);
+                }
+
+                $resultCode = $responseJson['ResultCode'] ?? null;
+
+                // ONLY success if ResultCode == 100
+                $isSuccess = ($resultCode == 100);
+
+                // update log
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "http_status"   => $status,
+                        "result_code"   => $resultCode,
+                        "response_body" => $body,
+                        "status"        => $isSuccess ? "success" : "failed",
+                        "updated_at"    => now()
+                    ]);
+
+                if ($isSuccess) {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 1]);
+
+                    $successCount++;
+
+                } else {
+
+                    DB::table($table)
+                        ->where('id', $record->id)
+                        ->update(['is_sent_to_pg' => 2]);
+
+                    $failedCount++;
+                }
+
+            } catch (\Exception $e) {
+
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "status"        => "error",
+                        "response_body" => $e->getMessage(),
+                        "updated_at"    => now()
+                    ]);
+
+                DB::table($table)
+                    ->where('id', $record->id)
+                    ->update(['is_sent_to_pg' => 2]);
+
+                $failedCount++;
+            }
+        }
+
+        return response()->json([
+            "status"  => false,
+            "message" => "Loop limit reached, process incomplete.",
+            "processed" => $processed
+        ]);
+    }
+    private function buildSchoolPayload($row)
+    {
+        // generate transaction id if missing
+        if (empty($row->transaction_id)) {
+
+            $tid = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
+
+            DB::table('pg_school_fee_schedule')
+                ->where('id', $row->id)
+                ->update(['transaction_id' => $tid]);
+
+            $row->transaction_id = $tid;
+        }
+
+        // get school details
+        $school = DB::table('school_information')
+            ->where('id', $row->school_id)
+            ->select('code', 'name')
             ->first();
 
-        // Build PG payload EXACTLY as required
+        // safe handling (prevents crashes)
+        $schoolCode = $school->code ?? 'UNKNOWN';
+        $schoolName = $school->name ?? 'UNKNOWN';
+
+        // build payment cycle string
+        $paymentCycle = "KGS 2026 Term 1, {$schoolCode} - {$schoolName}";
+
         return [
-            "TransactionID"    => $school->transaction_id,
+
+            "TransactionID"    => $row->transaction_id,
             "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
-            "RecipientID"      => Str::uuid()->toString(),
+
+            "RecipientID"      => \Illuminate\Support\Str::uuid()->toString(),
             "RecipientType"    => "Beneficiary",
-            "Gender"           => "Female",
-            "FirstName"        => $school->school_emis ?? "0",
-            "LastName"         => $school->school_name ?? "0",
+
+            // using school info
+            "FirstName"        => $schoolCode,   // EMIS
+            "LastName"         => $schoolName,   // school name
+
             "MobileNumber"     => "",
             "Language"         => "English",
             "LanguageCode"     => "eng",
             "Country"          => "ZM",
-            "PSP"              => "Zanaco",
-            "Province"         => $school->school_province ?? "0",
-            "District"         => $districtName,
+
+            "PSP"              => "ZANACO",
+
+            "Province"         => "0",
+            "District"         => $row->district_id ?? "0",
+
             "Ward"             => "0",
-            "CWAC"             => $school->cwac_name ?? "0",
-            "RegisteredTown"   => "0",
-            "DistrictID"       => $districtId,
+
+            "DistrictID"       => $row->district_id ?? 0,
             "WardID"           => 0,
-            "CWACID"           => $school->cwac_id ?? 0,
-            "HouseholdID"      => 0,
+
             "NRC"              => "999999/99/1",
             "DateOfBirth"      => "0",
-            "AccountNumber"    => $school->bank_account ?? "",
-            "AccountExtra"     => $school->bank_name ?? "ZANACO",
+
+            "AccountNumber"    => $row->bank_account ?? "",
+            "AccountExtra"     => $row->bank_name ?? "",
+
             "Currency"         => "ZMW",
-            "TransactionType"  => "Grant",
-            "Amount"           => floatval($school->grant_amount),
+            "TransactionType"  => "School Fees",
+
+            "Amount"           => floatval($row->fee_amount_test),
+
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
             "GPSLatitude"      => 0,
             "GPSLongitude"     => 0,
-            "PaymentReference" => "[UNDELIVERED][UNDELIVERED][UNDELIVERED]Manual payment",
-            "PaymentCycle"     => "KGS 2025 Term 2 Payment"
+
+            "PaymentReference" => $row->payment_ref_no,
+
+            // final safe field
+            "PaymentCycle"     => $paymentCycle
+        ];
+    }
+    private function buildDistrictPayload($row)
+    {
+        // generate transaction id if missing (safety, though retry already handles this)
+        if (empty($row->transaction_id)) {
+
+            $tid = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
+
+            DB::table('pg_district_grant_schedule')
+                ->where('id', $row->id)
+                ->update(['transaction_id' => $tid]);
+
+            $row->transaction_id = $tid;
+        }
+
+        // fetch district info
+        $district = DB::table('districts')
+            ->where('id', $row->district_id)
+            ->select('code', 'name')
+            ->first();
+
+        // safe handling
+        $districtCode = $district->code ?? 'UNKNOWN';
+        $districtName = $district->name ?? 'UNKNOWN';
+
+        // dynamic term + year
+        $term = $row->term ?? 1;
+        $year = $row->year ?? date('Y');
+
+        $paymentCycle = "Term {$term} {$year}";
+
+        // format amount
+        $amount = number_format($row->grant_amount ?? 0, 2);
+
+        // ✅ user-facing message (SMS / notification)
+        $paymentReference = "KGS Grant ZMW {$amount} sent to {$districtName} ({$paymentCycle})";
+
+        return [
+
+            "TransactionID"    => $row->transaction_id,
+            "TransactionDate"  => now()->format('Y-m-d\TH:i:s'),
+
+            "RecipientID"      => \Illuminate\Support\Str::uuid()->toString(),
+            "RecipientType"    => "Beneficiary",
+
+            // using district info
+            "FirstName"        => $districtCode,
+            "LastName"         => $districtName,
+
+            "MobileNumber"     => "",
+            "Language"         => "English",
+            "LanguageCode"     => "eng",
+            "Country"          => "ZM",
+
+            "PSP"              => "ZANACO",
+
+            "Province"         => "0",
+            "District"         => $districtName,
+
+            "Ward"             => "0",
+
+            "DistrictID"       => $row->district_id ?? 0,
+            "WardID"           => 0,
+
+            "NRC"              => "999999/99/1",
+            "DateOfBirth"      => "0",
+
+            "AccountNumber"    => $row->bank_account ?? "",
+            "AccountExtra"     => $row->bank_name ?? "",
+
+            "Currency"         => "ZMW",
+            "TransactionType"  => "Education Grant",
+
+            "Amount"           => floatval($row->grant_amount ?? 0),
+
+            "GPSAccuracy"      => 0,
+            "GPSAltitude"      => 0,
+            "GPSLatitude"      => 0,
+            "GPSLongitude"     => 0,
+
+            // ✅ improved message
+            "PaymentReference" => $paymentReference,
+
+            // keep for system tracking
+            "PaymentCycle"     => "KGS {$paymentCycle}, {$districtCode} - {$districtName}"
         ];
     }
     public function getNextSchoolForPayment()
@@ -4514,8 +4884,155 @@ class MobileController extends Controller
         }
     }
 
+    public function retrySingleDistrictPayment(Request $request)
+    {
+        try {
+
+            $transaction_id = $request->transaction_id;
+
+            if (!$transaction_id) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "transaction_id is required"
+                ], 400);
+            }
+
+            // get record from schedule
+            $record = DB::table('pg_district_grant_schedule')
+                ->where('transaction_id', $transaction_id)
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "Record not found"
+                ], 404);
+            }
+
+            // prevent retry if already successful
+            if ((int)$record->is_sent_to_pg === 1) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "Payment already successful, cannot retry"
+                ], 400);
+            }
+
+            // 🔥 ALWAYS generate NEW transaction id for retry
+            $newTransactionId = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
+
+            DB::table('pg_district_grant_schedule')
+                ->where('id', $record->id)
+                ->update([
+                    'transaction_id' => $newTransactionId
+                ]);
+
+            // update local object so payload uses new ID
+            $record->transaction_id = $newTransactionId;
+
+            // build payload
+            $payloadItem = $this->buildDistrictPayload($record);
+
+            $tid = $payloadItem["TransactionID"];
+            $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
+            $headers = $this->preparePGHeaders();
+
+            // insert log
+            $logId = DB::table('pg_payment_logs')->insertGetId([
+                "payment_ref_no"   => $record->payment_ref_no,
+                "transaction_id"   => $tid,
+                "payment_phase"    => 0,
+                "request_url"      => $url,
+                "request_payload"  => json_encode($payloadItem),
+                "headers"          => json_encode($headers),
+                "status"           => "pending",
+                "created_at"       => now(),
+                "updated_at"       => now()
+            ]);
+
+            try {
+
+                $client = new \GuzzleHttp\Client([
+                    'verify' => false,
+                    'timeout' => 60
+                ]);
+
+                $response = $client->post($url, [
+                    'headers'     => $headers,
+                    'json'        => $payloadItem,
+                    'http_errors' => false
+                ]);
+
+                $httpStatus = $response->getStatusCode();
+                $body       = $response->getBody()->getContents();
+
+                $responseJson = json_decode($body, true);
+                $resultCode   = $responseJson['ResultCode'] ?? null;
+
+                $isSuccess = ($resultCode == 100);
+
+                // update log
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "http_status"   => $httpStatus,
+                        "result_code"   => $resultCode,
+                        "response_body" => $body,
+                        "status"        => $isSuccess ? "success" : "failed",
+                        "updated_at"    => now()
+                    ]);
+
+                // update schedule status only (transaction_id already updated)
+                DB::table('pg_district_grant_schedule')
+                    ->where('id', $record->id)
+                    ->update([
+                        'is_sent_to_pg' => $isSuccess ? 1 : 2
+                    ]);
+
+                return response()->json([
+                    "status" => true,
+                    "message" => $isSuccess ? "Payment successful" : "Payment failed",
+                    "pg_response" => $responseJson
+                ]);
+
+            } catch (\Exception $e) {
+
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "status"        => "error",
+                        "response_body" => $e->getMessage(),
+                        "updated_at"    => now()
+                    ]);
+
+                DB::table('pg_district_grant_schedule')
+                    ->where('id', $record->id)
+                    ->update([
+                        'is_sent_to_pg' => 2
+                    ]);
+
+                return response()->json([
+                    "status" => false,
+                    "message" => "Retry failed",
+                    "error" => $e->getMessage()
+                ], 500);
+            }
+
+        } catch (\Throwable $e) {
+
+            \Log::error("Retry single payment error", [
+                "error" => $e->getMessage()
+            ]);
+
+            return response()->json([
+                "status" => false,
+                "message" => "Unexpected error",
+                "error" => $e->getMessage()
+            ], 500);
+        }
+    }
+
     //transaction statuses
-    public function pgLogsList(Request $request)
+    public function pgLogsList1(Request $request)
     {
         $query = DB::table('pg_payment_logs as t')
             ->leftJoin('school_information as s', 's.id', '=', 't.school_id')
@@ -4526,6 +5043,7 @@ class MobileController extends Controller
                 't.payment_phase',
                 't.school_id',
                 's.name as school_name',
+                't.result_code',
                 't.http_status',
                 't.status as pg_status',
                 't.created_at'
@@ -4578,6 +5096,71 @@ class MobileController extends Controller
             "data" => $rows
         ]);
     }
+    public function pgLogsList(Request $request)
+    {
+        $query = DB::table('pg_payment_logs as t')
+            ->leftJoin('school_information as s', 's.id', '=', 't.school_id')
+            ->select(
+                't.id',
+                't.transaction_id',
+                't.payment_ref_no',
+                't.payment_phase',
+                't.school_id',
+                's.name as school_name',
+                't.result_code',
+                't.http_status',
+                't.status as pg_status',
+                't.created_at'
+            );
+
+        if ($request->payment_ref_no) {
+            $query->where('t.payment_ref_no', $request->payment_ref_no);
+        }
+
+        if ($request->payment_phase) {
+            $query->where('t.payment_phase', $request->payment_phase);
+        }
+
+        if ($request->school_id) {
+            $query->where('t.school_id', $request->school_id);
+        }
+
+        if ($request->status) {
+            $query->where('t.status', $request->status);
+        }
+
+        if ($request->from_date) {
+            $query->whereDate('t.created_at', '>=', $request->from_date);
+        }
+
+        if ($request->to_date) {
+            $query->whereDate('t.created_at', '<=', $request->to_date);
+        }
+
+        if ($request->search) {
+            $search = '%'.$request->search.'%';
+            $query->where(function ($q) use ($search) {
+                $q->where('t.transaction_id', 'like', $search)
+                ->orWhere('s.name', 'like', $search);
+            });
+        }
+
+        $query->orderBy('t.created_at', 'desc');
+
+        $rows = $query->paginate(50);
+
+        return response()->json([
+            "status" => true,
+            "count"  => $rows->total(),
+            "data"   => $rows->items(),
+            "pagination" => [
+                "current_page" => $rows->currentPage(),
+                "last_page"    => $rows->lastPage(),
+                "next_page"    => $rows->nextPageUrl(),
+                "prev_page"    => $rows->previousPageUrl()
+            ]
+        ]);
+    }
     public function pgLogsDetails($transaction_id)
     {
         $row = DB::table('pg_payment_logs as t')
@@ -4614,7 +5197,7 @@ class MobileController extends Controller
         ]);
     }
 
-    public function getFailedPayments(Request $request)
+    public function getFailedPayments1(Request $request)
     {
         $latestLogs = DB::table('pg_payment_logs')
             ->select(
@@ -4703,6 +5286,91 @@ class MobileController extends Controller
             "count"  => $rows->total(),
             "data"   => $rows
         ]);
+    }
+
+    public function getFailedPayments(Request $req)
+    {
+        try {
+            $year = $req->input('year');
+            $term = $req->input('term');
+
+            $data = DB::table('pg_district_grant_schedule as t1')
+                ->leftJoin('pg_payment_logs as t2', function ($join) {
+                    $join->on(
+                        DB::raw('t1.transaction_id COLLATE utf8mb4_unicode_ci'),
+                        '=',
+                        DB::raw('t2.transaction_id COLLATE utf8mb4_unicode_ci')
+                    );
+                })
+                ->leftJoin('districts as t3', 't1.district_id', '=', 't3.id')
+
+                // filter failed records
+                ->where(function ($q) {
+                    $q->where('t1.is_sent_to_pg', 2)
+                    ->orWhere('t2.status', 'failed');
+                })
+
+                // optional filters (important for your system)
+                ->when($year, function ($q) use ($year) {
+                    $q->where('t1.year', $year);
+                })
+                ->when($term, function ($q) use ($term) {
+                    $q->where('t1.term', $term);
+                })
+
+                ->select([
+                    // transaction
+                    't1.transaction_id',
+
+                    // result_code (prefer stored column, fallback to JSON)
+                    DB::raw("
+                        CASE 
+                            WHEN t2.result_code IS NOT NULL AND t2.result_code != 0 
+                            THEN t2.result_code
+                            WHEN JSON_VALID(t2.response_body)
+                            THEN JSON_UNQUOTE(JSON_EXTRACT(t2.response_body, '$.ResultCode'))
+                            ELSE NULL
+                        END AS result_code
+                    "),
+
+                    't2.status',
+
+                    // result_details
+                    DB::raw("
+                        CASE 
+                            WHEN JSON_VALID(t2.response_body)
+                            THEN JSON_UNQUOTE(JSON_EXTRACT(t2.response_body, '$.ResultDetails'))
+                            ELSE NULL
+                        END AS result_details
+                    "),
+
+                    // district info
+                    't3.name as district_name',
+                    't1.bank_name as district_bank_name',
+                    't1.bank_account as district_bank_account',
+                    't1.branch_name as district_branch',
+                    't1.sort_code as district_sort_code',
+                    't1.grant_amount',
+                ])
+
+                ->orderByDesc('t1.id')
+                ->paginate(100); // better than LIMIT
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Failed payments retrieved successfully',
+                'data' => $data
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed payments fetch error: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to retrieve failed payments',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     // sa_app_submissions
@@ -4946,85 +5614,122 @@ class MobileController extends Controller
         ]);
     }
 
-    public function generateSchoolPaymentBatches()
+
+
+    public function migrateBeneficiariesToReport()
     {
-        try {
-            set_time_limit(0);
+        $now = Carbon::now();
+        $totalInserted = 0; // track total rows
 
-            $year = date('Y');
-            $month = date('m');
+        DB::table('beneficiary_payresponses_report')
+            ->orderBy('id')
+            ->chunk(500, function ($records) use ($now, &$totalInserted) {
 
-            $startTime = microtime(true);
+                $insertData = [];
 
-            // get schools with null batch
-            $schools = DB::table('sa_app_beneficiary_list_4')
-                ->select('school_id', 'school_name', 'school_district')
-                ->whereNull('sch_pay_bat_id')
-                ->groupBy('school_id', 'school_name', 'school_district')
-                ->get();
+                foreach ($records as $row) {
 
-            if ($schools->isEmpty()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'No schools found with null batch id'
-                ]);
-            }
+                    $uuid = Str::uuid();
+                    $timestamp = $now->timestamp;
+                    $transactionId = "KGS_TID_{$uuid}_{$timestamp}";
 
-            $updatedSchools = 0;
+                    $names = explode(' ', trim($row->hhh_fullname));
+                    $firstName = $names[0] ?? null;
+                    $lastName = count($names) > 1 ? end($names) : null;
 
-            foreach ($schools as $school) {
+                    $insertData[] = [
+                        'school_id' => $row->school_id,
+                        'beneficiary_id' => $row->girl_id,
+                        'beneficiary_no' => $row->beneficiary_id,
 
-                // clean school name (remove "362 - ")
-                $schoolName = trim(preg_replace('/^\d+\s*-\s*/', '', $school->school_name));
+                        'first_name' => $row->first_name,
+                        'last_name' => $row->surname,
 
-                // clean district name (remove "18 - ")
-                $districtName = trim(preg_replace('/^\d+\s*-\s*/', '', $school->school_district));
+                        'year_of_enrollment' => 2026,
+                        'term_id' => 1,
+                        'grant_amount' => 800.00,
+                        'grant_yr_received' => $now,
+                        'payment_ref_no' => 'KGS/PAY/REQ/2026/0001',
 
-                // normalize names → replace spaces with hyphens, uppercase
-                $schoolName = strtoupper(str_replace(' ', '-', $schoolName));
-                $districtName = strtoupper(str_replace(' ', '-', $districtName));
+                        'school_grade' => $row->confirmed_grade,
+                        'dob' => $row->verified_dob,
+                        'school_name' => $row->school_name,
+                        'school_district' => $row->school_district,
 
-                // generate 12-char unique string
-                $unique = strtoupper(substr(bin2hex(random_bytes(6)), 0, 12));
+                        'payment_status' => 'Pending Release',
+                        'payment_status_id' => 1,
+                        'payment_phase' => 1,
 
-                // final batch id
-                $batchId = $school->school_id
-                    . '---' . $schoolName
-                    . '---' . $districtName
-                    . '-' . $year
-                    . '-' . $month
-                    . '-' . $unique;
+                        'hhh_nrc_number' => $row->hhh_NRC,
+                        'hhh_fname' => $firstName,
+                        'hhh_lname' => $lastName,
 
-                // update all rows for that school
-                $affected = DB::table('sa_app_beneficiary_list_4')
-                    ->where('school_id', $school->school_id)
-                    ->whereNull('sch_pay_bat_id')
-                    ->update([
-                        'sch_pay_bat_id' => $batchId
-                    ]);
+                        'transaction_id' => $transactionId,
+                        'transaction_time_initiated' => $now,
 
-                if ($affected > 0) {
-                    $updatedSchools++;
+                        'in_excel' => 1,
+
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
                 }
-            }
 
-            $endTime = microtime(true);
+                if (!empty($insertData)) {
+                    DB::table('sa_app_beneficiary_list_5')->insert($insertData);
+                    $totalInserted += count($insertData);
+                }
+            });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Batch IDs generated successfully',
-                'schools_updated' => $updatedSchools,
-                'time_seconds' => round($endTime - $startTime, 2)
-            ]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Migration completed successfully',
+            'rows_inserted' => $totalInserted
+        ]);
+    }
 
-        } catch (\Exception $e) {
+    public function getDistrictGrantSummary()
+    {
+        $data = DB::table('pg_district_grant_schedule as t1')
+            ->leftJoin('districts as t2', 't1.district_id', '=', 't2.id')
+            ->select(
+                't2.name as district_name',
+                't1.bank_name as district_bank',
+                't1.bank_account as district_bank_account',
+                't1.sort_code as district_sort_code',
+                DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
+                DB::raw('SUM(t1.grant_amount) as total_amount')
+            )
+            ->groupBy('t1.district_id', 't2.name')
+            ->orderBy('total_amount', 'desc')
+            ->get();
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Error generating batch IDs',
-                'error' => $e->getMessage()
-            ]);
-        }
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
+    }
+
+    public function getSchoolFeeSummary()
+    {
+        $data = DB::table('pg_school_fee_schedule as t1')
+            ->leftJoin('school_information as t2', 't1.school_id', '=', 't2.id')
+            ->select(
+                't2.name as school_name',
+                't2.code as school_emis',
+                't1.bank_name as school_bank',
+                't1.bank_account as school_bank_account',
+                't1.sort_code as school_sort_code',
+                DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
+                DB::raw('SUM(t1.fee_amount) as total_amount')
+            )
+            ->groupBy('t1.school_id', 't2.name', 't2.code')
+            ->orderBy('total_amount', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
     }
 
 }

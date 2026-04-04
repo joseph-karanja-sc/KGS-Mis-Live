@@ -755,10 +755,18 @@ function loadSummary() {
                                 <button class="kgs-menu-btn">Actions ▼</button>
 
                                 <ul class="kgs-menu-list">
-                                    <li onclick="openPaymentPhases('${row.payment_ref_no}')">View</li>
+                                    <li onclick="handleView('${row.payment_ref_no}', '${row.payment_category}')">View</li>
                                     <li onclick="panelBApproval('${row.payment_ref_no}')">Approve Payment Request</li>
+                                    ${
+                                        row.workflow_status?.toLowerCase() === "pending submission to pg"
+                                        ? `<li onclick="openPGFlow('${row.payment_ref_no}', '${row.payment_category}')">
+                                                Submit Payment to PG
+                                        </li>`
+                                        : `<li style="opacity:0.4; pointer-events:none;">
+                                                Submit Payment to PG (Locked)
+                                        </li>`
+                                    }
                                 </ul>
-
                             </div>
                         </td>
                     </tr>
@@ -828,6 +836,136 @@ function loadBeneficiaries(refNo) {
 
             document.getElementById("appContainer").innerHTML = html;
         });
+}
+
+function handleView(refNo, category) {
+
+    if (category === 'School Fees') {
+        openSchoolSummary(refNo);
+    } 
+    else if (category === 'Education Grant') {
+        openDistrictSummary(refNo);
+    } 
+    else {
+        // fallback to existing behavior
+        openPaymentPhases(refNo);
+    }
+}
+
+function openSchoolSummary(refNo) {
+
+    breadcrumbStack.push({
+        label: refNo,
+        action: () => openSchoolSummary(refNo)
+    });
+
+    renderBreadcrumbs();
+    renderTabs([], "School Summary");
+
+    document.getElementById("appContainer").innerHTML = `<h3>Loading school summary...</h3>`;
+
+    fetch(`/api/zispis/v1/pg-schoolfee_summary`)
+        .then(res => res.json())
+        .then(json => {
+
+            if (!json.success || json.data.length === 0) {
+                document.getElementById("appContainer").innerHTML =
+                    `<div class="empty-state">No school summary data found.</div>`;
+                return;
+            }
+
+            let html = `
+                <h3>School Fee Summary</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>School Name</th>
+                            <th>EMIS Code</th>
+                            <th>Total Beneficiaries</th>
+                            <th>Total Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            json.data.forEach(row => {
+                html += `
+                    <tr>
+                        <td>${row.school_name}</td>
+                        <td>${row.school_emis}</td>
+                        <td>${row.total_beneficiaries}</td>
+                        <td>${Number(row.total_amount).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            html += "</tbody></table>";
+
+            document.getElementById("appContainer").innerHTML = html;
+        });
+}
+
+function openDistrictSummary(refNo) {
+
+    breadcrumbStack.push({
+        label: refNo,
+        action: () => openDistrictSummary(refNo)
+    });
+
+    renderBreadcrumbs();
+    renderTabs([], "District Summary");
+
+    document.getElementById("appContainer").innerHTML = `<h3>Loading district summary...</h3>`;
+
+    fetch(`/api/zispis/v1/pg-grant-summary`)
+        .then(res => res.json())
+        .then(json => {
+
+            if (!json.success || json.data.length === 0) {
+                document.getElementById("appContainer").innerHTML =
+                    `<div class="empty-state">No district summary data found.</div>`;
+                return;
+            }
+
+            let html = `
+                <h3>District Grant Summary</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>District Name</th>
+                            <th>Total Beneficiaries</th>
+                            <th>Total Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            json.data.forEach(row => {
+                html += `
+                    <tr>
+                        <td>${row.district_name}</td>
+                        <td>${row.total_beneficiaries}</td>
+                        <td>${Number(row.total_amount).toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            html += "</tbody></table>";
+
+            document.getElementById("appContainer").innerHTML = html;
+        });
+}
+
+function openPGFlow(refNo, category) {
+
+    // store globally for later use
+    window.pgContext = {
+        refNo: refNo,
+        category: category
+    };
+
+    // phase no longer needed → pass null or 0
+    showPGModal(refNo, null);
 }
 
 
@@ -1343,7 +1481,7 @@ function initiateDisbursement() {
     }, 3000);
 }
 
-async function initiateDisbursement() {
+async function initiateDisbursementOld() {
 
     const refNo = document.getElementById("disburseRefNo").value;
 
@@ -1390,6 +1528,121 @@ async function initiateDisbursement() {
         showToast("error", "Network or server error.");
         console.error("Disbursement error:", error);
     }
+}
+
+async function triggerPGSubmissionOld() {
+
+    const refNo = document.getElementById("disburseRefNo").value;
+
+    // 🔥 determine type (IMPORTANT)
+    const category = window.currentPaymentCategory || ''; 
+
+    const paymentType =
+        category.toLowerCase().includes('school') ? 'school' : 'district';
+
+    const btn = event.target;
+    btn.classList.add("btn-loading");
+    btn.innerText = "Processing...";
+
+    try {
+
+        const response = await fetch(
+            "https://kgsmis.edu.gov.zm/api/zispis/v1/processAllSchoolsForPG",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    payment_ref_no: refNo,
+                    payment_type: paymentType   // ✅ NEW
+                })
+            }
+        );
+
+        const json = await response.json();
+
+        btn.classList.remove("btn-loading");
+        btn.innerText = "Disburse Funds";
+        closeDisburseModal();
+
+        if (json.status === true) {
+            showToast("success", json.message ?? "Disbursement completed.");
+        } else {
+            showToast("error", json.message ?? "Disbursement failed.");
+        }
+
+    } catch (error) {
+        btn.classList.remove("btn-loading");
+        btn.innerText = "Disburse Funds";
+        closeDisburseModal();
+
+        showToast("error", "Network or server error.");
+        console.error("Disbursement error:", error);
+    }
+}
+
+async function triggerPGSubmission(refNo, category, btn = null) {
+
+    // determine type directly from parameter
+    const paymentType =
+        (category || '').toLowerCase().includes('school') ? 'school' : 'district';
+
+    // safe button handling
+    if (!btn) {
+        btn = event?.target || document.querySelector(".btn-primary");
+    }
+
+    btn.classList.add("btn-loading");
+    btn.innerText = "Processing...";
+
+    try {
+
+        const response = await fetch(
+            "https://kgsmis.edu.gov.zm/api/zispis/v1/processAllSchoolsForPG",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    payment_ref_no: refNo,   // ✅ from param
+                    payment_type: paymentType
+                })
+            }
+        );
+
+        const json = await response.json();
+
+        btn.classList.remove("btn-loading");
+        btn.innerText = "Disburse Funds";
+        closeDisburseModal();
+
+        if (json.status === true) {
+            showToast("success", json.message ?? "Disbursement completed.");
+        } else {
+            showToast("error", json.message ?? "Disbursement failed.");
+        }
+
+    } catch (error) {
+        btn.classList.remove("btn-loading");
+        btn.innerText = "Disburse Funds";
+        closeDisburseModal();
+
+        showToast("error", "Network or server error.");
+        console.error("Disbursement error:", error);
+    }
+}
+
+function handleDisbursementClick(btn) {
+
+    const refNo = document.getElementById("disburseRefNo").value;
+
+    // get category from global context (you already set this earlier)
+    const category = window.pgContext?.category || '';
+
+    // call your real API function
+    triggerPGSubmission(refNo, category, btn);
 }
 
 
@@ -1467,7 +1720,7 @@ async function initiateDisbursement() {
 
         <div class="modal-footer">
             <button class="btn-cancel" onclick="closeDisburseModal()">Cancel</button>
-            <button id="disburseBtn" class="btn-submit" onclick="initiateDisbursement()">Disburse Funds</button>
+            <button id="disburseBtn" class="btn-submit" onclick="handleDisbursementClick(this)">Disburse Funds</button>
         </div>
 
     </div>

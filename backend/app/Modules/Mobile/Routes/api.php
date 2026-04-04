@@ -45,6 +45,8 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     Route::post('/submit-panel-b', 'MobileController@submitToPanelB');
     Route::post('/panelb-approval', 'MobileController@PanelBApproval');
     Route::get('/pg-coordinators', 'MobileController@getPGCoordinators');
+    Route::get('/pg-grant-summary', 'MobileController@getDistrictGrantSummary');
+    Route::get('/pg-schoolfee_summary', 'MobileController@getSchoolFeeSummary');
 
     // pg
     Route::post('/pg/submit-payment-to-pg', 'MobileController@submitPaymentToPGDebug');
@@ -55,12 +57,15 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     Route::get('/regen-tid', 'MobileController@regenerateTransactionIds');
     Route::get('/gen-sch-pay-bat', 'MobileController@generateSchoolPaymentBatches');
 
+    
+    Route::get('/migrate-records', 'MobileController@migrateBeneficiariesToReport');
 
     Route::get('/pg/transactions', 'MobileController@pgLogsList');
     Route::get('/pg/transactions/{transaction_id}', 'MobileController@pgLogsDetails');
     Route::get('/pg/failed-payments', 'MobileController@getFailedPayments');
 
-    Route::post('/pg/retry-one-payment', 'MobileController@retrySingleSchoolPayment');
+    Route::post('/pg/retry-one-payment-school', 'MobileController@retrySingleSchoolPayment');
+    Route::post('/pg/retry-one-payment-district', 'MobileController@retrySingleDistrictPayment');
 
     Route::post('/processAllSchoolsForPG', 'MobileController@processAllSchoolsForPG');
 

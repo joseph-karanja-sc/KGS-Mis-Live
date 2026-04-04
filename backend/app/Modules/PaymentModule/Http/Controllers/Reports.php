@@ -825,7 +825,7 @@ class Reports extends Controller
         PDF::Output('Payment Schedule' . time() . '.pdf', 'I');
     }
 
-    public function printPaymentrequestschedule(Request $req)
+    public function printPaymentrequestscheduleOld(Request $req)
     {
         //$memory_limit = ini_get('memory_limit');
        // $startMemory = memory_get_usage();
@@ -887,6 +887,188 @@ class Reports extends Controller
         ) as school_feessummary,
                     t2.name as school_name, t3.name as district_name,t4.name as province_name'))
                 ->join('beneficiary_enrollments as t5', 't1.id', '=', 't5.beneficiary_id')
+                ->join('school_information as t2', 't2.id', '=', 't5.school_id')
+                ->join('districts as t3', 't2.district_id', '=', 't3.id')
+                ->join('provinces as t4', 't3.province_id', '=', 't4.id')
+                ->join('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
+                ->leftJoin('school_bankinformation as t9', function ($join) {
+                    $join->on('t2.id', '=', 't9.school_id')
+                        ->where('t9.is_activeaccount', 1);
+                })
+                ->leftJoin('bank_details as t10', 't9.bank_id', '=', 't10.id')
+                ->leftJoin('bank_branches as t11', 't9.branch_name', '=', 't11.id')
+                ->where(array('t8.payment_request_id' => $payment_request_id))
+                ->groupBy('t2.id');
+            $results = $qry->get();
+            $results = convertStdClassObjToArray($results);
+            //$results = decryptArray($results);
+            if (count($results)) {
+                //the table header
+                PDF::ln(4.2);
+                PDF::SetFont('times', '', 7.74);
+                $payment_table = '<table border="1" cellpadding="3">
+                                       <tbody>
+                                         <tr nobr="true">
+                                                <td rowspan="2" width="40" >S/n</td>
+                                                <td rowspan="2">PROVINCE</td>
+                                                <td rowspan="2">DISTRICT OF SCHOOL</td>
+                                                <td rowspan="2">SCHOOL NAME</td>
+                                                <td rowspan="2">GIRLS PER SCHOOL</td>
+                                                <td rowspan="2">BANK NAME</td>
+                                                <td rowspan="2">BANK ACCOUNT</td>
+                                                <td rowspan="2">BRANCH</td>
+                                                <td rowspan="2">SORT CODE</td>
+                                                <td colspan="3" align="center">AMOUNTS</td>
+                                            </tr>
+
+                                            <tr>
+                                                  <td>INDICATED</td>
+                                                  <td>SUSPENSE</td>
+                                                  <td>PAYABLE</td>
+                                            </tr>';
+                $i = 1;
+                $total_schoolfees = 0;
+                $total_suspense = 0;
+                $total_payable = 0;
+                $total_girls = 0;
+                //$results= array_slice($results, 0, 360); 
+               // dd($results);
+                foreach ($results as $rec) {
+                    //the school details
+                    $suspense_amount = getReconciliationSuspenseAmount($payment_request_id, $rec['school_id']);
+
+                    $amount_payable = $rec['school_feessummary'] + $suspense_amount;
+                    $payment_table .= '<tr nobr="true">
+                                                <td>' . $i . '</td>
+                                                <td>' . $rec['province_name'] . '</td>
+                                                <td>' . $rec['district_name'] . '</td>
+                                                <td>' . $rec['school_name'] . '</td>
+                                                <td style="text-align:right">' . $rec['no_of_beneficiary'] . '</td>
+                                                <td>' . $rec['bank_name'] . '</td>
+                                                <td>' . $rec['account_no'] . '</td>
+                                                <td>' . $rec['branch_name'] . '</td>
+                                                <td>' . $rec['sort_code'] . '</td>
+                                                <td style="text-align:right">K ' . formatMoney($rec['school_feessummary']) . '</td>
+                                                <td style="text-align:right">K ' . formatMoney($suspense_amount) . '</td>
+                                                <td style="text-align:right">K ' . formatMoney($amount_payable) . '</td>
+                                            </tr>';
+                    $total_girls = $total_girls + $rec['no_of_beneficiary'];
+                    $total_schoolfees += $rec['school_feessummary'];
+                    $total_suspense += $suspense_amount;
+                    $total_payable += $amount_payable;
+                    $i++;
+                    ob_flush();
+                }
+                
+                $payment_table .= '<tr style="font-weight:bold" nobr="true">
+                                                <td colspan="4" align="right">TOTAL BENEFICIARIES</td>
+                                                <td style="text-align:right">' . $total_girls . '</td>
+                                                <td colspan="4" align="right">TOTAL AMOUNT</td>
+                                                <td style="text-align:right">K ' . formatMoney($total_schoolfees) . '</td>
+                                                <td style="text-align:right">K ' . formatMoney($total_suspense) . '</td>
+                                                <td style="text-align:right">K ' . formatMoney($total_payable) . '</td>
+                                            </tr>
+                                      ';
+
+                $payment_table .= '</table>';
+
+
+                PDF::writeHTML($payment_table, true, false, false, false, 'L');
+                //the other details of prepared by
+                PDF::setCellHeightRatio(1.8);
+                $approval_table = '<table width="80%" border="1" cellpadding="3">
+                                       <tbody>
+                                           <tr nobr="true">
+                                                <td width="70">PREPARED BY:</td>
+                                                <td width="100">' . $this->formatSignatory($data['prepared_by']) . '</td>
+                                                <td width="50">POSITION:</td>
+                                                <td width="70">' . $this->formatSignatory($data['preparedby_pos']) . '</td>
+                                                <td width="70">SIGNATURE:</td>
+                                                <td width="70">' . $this->formatSignatory() . '</td>
+                                                <td width="50">DATE:</td>
+                                                <td width="50">' . formatDaterpt($data['prepared_on']) . '</td>
+                                            </tr>
+                                            <tr nobr="true">
+                                                <td>CHECKED BY:</td>
+                                                <td>' . $this->formatSignatory($data['checked_byname']) . '</td>
+                                                <td>POSITION:</td>
+                                                <td>' . $this->formatSignatory($data['checkedby_pos']) . '</td>
+                                                <td>SIGNATURE:</td>
+                                                <td>' . $this->formatSignatory() . '</td>
+                                                <td>DATE:</td>
+                                                <td>' . formatDaterpt($data['checked_on']) . '</td>
+                                            </tr>
+                                             <tr nobr="true">
+                                                <td>APPROVED BY:</td>
+                                                <td>' . $this->formatSignatory($data['approved_byname']) . '</td>
+                                                <td>POSITION:</td>
+                                                <td >' . $this->formatSignatory($data['approvedby_pos']) . '</td>
+                                                <td>SIGNATURE:</td>
+                                                <td>' . $this->formatSignatory() . '</td>
+                                                <td>DATE:</td>
+                                                <td>' . formatDaterpt($data['approved_on']) . '</td>
+                                            </tr>
+                                        <tbody>
+                                      ';
+                PDF::writeHTML($approval_table, true, false, false, false, 'L');
+            } else {
+                //no details found
+                PDF::Cell(0, 5, 'No Enrollment Details', 0, 1, 'C');
+            }
+
+        } else {
+
+            //
+        }
+          //ini_set('memory_limit',$memory_limit);
+        PDF::Output('Payment Schedule' . time() . '.pdf', 'I');
+    }
+    public function printPaymentrequestschedule(Request $req) // 31st March 2026
+    {
+        $payment_request_id = $req->input('payment_request_id');
+        //the details from the payment table
+        PDF::AddPage('');
+        PDF::setMargins(8, 25, 8, true);
+        PDF::SetAutoPageBreak(TRUE, 0);//true sets it to on and 0 means margin is zero from sides
+        PDF::SetFont('times', '', 8);
+        $qry = DB::table('payment_request_details as t1')
+            ->select(DB::raw("t6.name as preparedby_pos, t7.name as checkedby_pos, t8.name as approvedby_pos,
+                              t1.*, CONCAT_WS(' ',decrypt(t2.first_name),decrypt(t2.last_name)) as prepared_by,
+                              t1.id as payment_request_id, CONCAT_WS(' ',decrypt(t4.first_name),decrypt(t4.last_name)) as approved_byname,
+                              CONCAT_WS(' ',decrypt(t3.first_name),decrypt(t3.last_name)) as checked_byname"))
+            ->leftJoin('users as t2', 't1.prepared_by', '=', 't2.id')
+            ->leftJoin('user_roles as t6', 't2.user_role_id', '=', 't6.id')
+            ->leftJoin('users as t3', 't1.checked_by', '=', 't3.id')
+            ->leftJoin('user_roles as t7', 't3.user_role_id', '=', 't7.id')
+            ->leftJoin('users as t4', 't1.approved_by', '=', 't4.id')
+            ->leftJoin('user_roles as t8', 't4.user_role_id', '=', 't8.id')
+            ->where(array('t1.id' => $payment_request_id));
+        $results = $qry->get();
+        $data = convertStdClassObjToArray($results);
+        //$data = decryptArray($results);
+        if (count($data) > 0) {
+            $data = $data[0];
+
+            $image_path = '\resources\images\kgs-logo.png';
+            PDF::Image(getcwd() . $image_path, 150, 10, 30, 20);
+
+            //the cell details
+            PDF::ln(4);
+            PDF::cell(0, 6, 'MINISTRY OF  EDUCATION', 0, 1);
+            PDF::cell(0, 6, 'GIRLS EDUCATION AND WOMEN EMPOWERMENT AND LIVELIHOOD PROJECT', 0, 1);
+            PDF::cell(0, 6, 'KEEPING GIRLS IN SCHOOL INITIATIVE', 0, 1);
+            PDF::cell(0, 6, 'PAYMENT REQUEST REPORT FOR THE YEAR ' . $data['payment_year'] . ' TERM I', 0, 1);
+            PDF::cell(0, 6, $data['payment_ref_no'], 0, 1, 'R');
+
+            //
+            //the school payment details
+            //get the school details
+            $qry = DB::table('beneficiary_payresponses_report as t5')
+                ->select(DB::raw('t2.id as school_id,t10.name as bank_name, t11.name as branch_name,
+                decrypt(t9.account_no) as account_no,t11.sort_code, count(t5.id) as no_of_beneficiary,
+                    t5.total_payable_fees as school_feessummary,
+                    t2.name as school_name, t3.name as district_name,t4.name as province_name'))
+                // ->join('beneficiary_enrollments as t5', 't1.id', '=', 't5.beneficiary_id')
                 ->join('school_information as t2', 't2.id', '=', 't5.school_id')
                 ->join('districts as t3', 't2.district_id', '=', 't3.id')
                 ->join('provinces as t4', 't3.province_id', '=', 't4.id')

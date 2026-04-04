@@ -2702,7 +2702,7 @@ class PaymentModuleController extends BaseController
     }
 
     //add validate ben school payment request
-    public function addValidateBenschoolpaymentrequest(Request $req)
+    public function addValidateBenschoolpaymentrequestOld(Request $req)
     {
         $payment_request_id = $req->input('payment_request_id');
         $term_id = $req->input('term_id');
@@ -2725,6 +2725,79 @@ class PaymentModuleController extends BaseController
                     $enrollment_id = $rec->enrollment_id;
                     $table_data = array(
                         'enrollment_id' => $enrollment_id
+                    );
+                    $qry = DB::table('beneficiary_payment_records')
+                        ->where($table_data)
+                        ->count();
+                    if ($qry == 0) {
+                        $table_data['created_at'] = Carbon::now();
+                        $table_data['created_by'] = $this->user_id;
+                        $data[] = array(
+                            'created_at' => Carbon::now(),
+                            'created_by' => $this->user_id,
+                            'enrollment_id' => $enrollment_id,
+                            'payment_request_id' => $payment_request_id);
+                    }
+                }
+                //then loop two for the insertion details
+                $size = 100;
+                $chunks = array_chunk($data, $size);
+                foreach ($chunks as $chunk) {
+                    DB::table('beneficiary_payment_records')->insert($chunk);
+                }
+            }
+            $res = array(
+                'success' => true,
+                'message' => 'Beneficiary Enrollment & Payment details Saved Successfully!!'
+            );
+        } catch (\Exception $exception) {
+            $res = array(
+                'success' => false,
+                'message' => $exception->getMessage()
+            );
+        } catch (\Throwable $throwable) {
+            $res = array(
+                'success' => false,
+                'message' => $throwable->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+    public function addValidateBenschoolpaymentrequest(Request $req) // 31st March 2026
+    {
+        $payment_request_id = $req->input('payment_request_id');
+        $term_id = $req->input('term_id');
+        $payment_year = $req->input('payment_year');
+        $data = $req->input('data');
+        // $records = explode(',', $data);
+    
+        try {
+            $records = DB::table('beneficiary_payresponses_report as t5')
+                ->leftJoin('beneficiary_payment_records as t8', function ($join) {
+                    $join->on('t5.id', '=', 't8.enrollment_id')
+                        ->where('t8.payment_request_id', '=', 55);
+                })
+                ->whereNull('t8.enrollment_id')
+                ->distinct()
+                ->pluck('t5.school_id')
+                ->toArray();
+
+            foreach ($records as $school_id) {
+                $qry = DB::table('beneficiary_payresponses_report as t5')
+                    ->select('t5.id as enrollment_id')
+                    ->join('school_information as t2', 't5.school_id', '=', 't2.id')
+                    ->leftJoin('beneficiary_payment_records as t7', 't5.id', '=', 't7.enrollment_id')
+                    ->where(array('t2.id' => $school_id, 't5.year_of_enrollment' => $payment_year))
+                    // ->whereNull('t7.id')
+                    ->where('t7.payment_request_id', '!=', 55)
+                    ->get();
+                $data = array();
+                //just to be sure...already we have checked for null of payment records id....
+                foreach ($qry as $rec) {
+                    $enrollment_id = $rec->enrollment_id;
+                    $table_data = array(
+                        'enrollment_id' => $enrollment_id,
+                        'payment_request_id' => 55
                     );
                     $qry = DB::table('beneficiary_payment_records')
                         ->where($table_data)
@@ -4744,7 +4817,7 @@ class PaymentModuleController extends BaseController
         json_output($resp);
     }
 
-    public function getpaymentrequestConsolidations(Request $req)
+    public function getpaymentrequestConsolidationsOld(Request $req)
     {
         try {
             $status_id = $req->input('status_id');
@@ -4797,8 +4870,60 @@ class PaymentModuleController extends BaseController
         }
         return response()->json($res);
     }
+    public function getpaymentrequestConsolidations(Request $req) // 31st March 2026
+    {
+        try {
+            $status_id = $req->input('status_id');
+            $term = $req->input('term');
+            $year = $req->input('year');
+            $qry = DB::table('payment_request_details as t1')
+                ->select(DB::raw("count(beneficiary_id) as no_of_beneficiaries, 
+                    SUM(t6.total_payable_fees) as total_fees,
+                 t1.*, t1.id as payment_request_id,
+                              st.name as approval_status_name,t2.id as prepared_by_id, CONCAT_WS(' ',decrypt(t2.first_name),
+                              decrypt(t2.last_name)) as prepared_by,
+                              t1.check_comment,t3.id as checked_by_id, CONCAT_WS(' ',decrypt(t3.first_name),
+                              decrypt(t3.last_name)) as checked_byname,
+                              COUNT(DISTINCT(t6.school_id)) as no_of_schools,t4.id as approved_by_id, CONCAT_WS(' ',
+                              decrypt(t4.first_name),decrypt(t4.last_name)) as approved_byname
+                              "))
+                ->leftJoin('school_transfer_statuses as st', 't1.approval_status', '=', 'st.id')
+                ->leftJoin('users as t2', 't1.prepared_by', '=', 't2.id')
+                ->leftJoin('users as t3', 't1.checked_by', '=', 't3.id')
+                ->leftJoin('users as t4', 't1.approved_by', '=', 't4.id')
+                ->leftJoin('beneficiary_payment_records as t5', 't1.id', '=', 't5.payment_request_id')
+                ->leftJoin('beneficiary_payresponses_report as t6', 't5.enrollment_id', '=', 't6.id')
+                //->leftJoin('reconciliation_suspense_account as t7', 't7.payment_request_id', '=', 't1.id')
+                ->where(array('status_id' => $status_id));
+            if (isset($year) && $year != '') {
+                $qry->where('t1.payment_year', $year);
+            }
+            if (isset($term) && $term != '') {
+                //$qry->where('t1.term_id', $term);
+            }
+            $qry->groupBy('t1.id')
+                ->orderBy('t1.id', 'DESC');
+            $results = $qry->get();
+            $res = array(
+                'success' => true,
+                'message' => returnMessage($results),
+                'results' => $results
+            );
+        } catch (\Exception $exception) {
+            $res = array(
+                'success' => false,
+                'message' => $exception->getMessage()
+            );
+        } catch (\Throwable $throwable) {
+            $res = array(
+                'success' => false,
+                'message' => $throwable->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
 
-    public function getValidateBeneficiaryschsummary(Request $req)
+    public function getValidateBeneficiaryschsummaryOld(Request $req)
     {
         $province_id = $req->input('province_id');
         $district_id = $req->input('district_id');
@@ -4848,8 +4973,55 @@ class PaymentModuleController extends BaseController
         }
         return response()->json($res);
     }
+    public function getValidateBeneficiaryschsummary(Request $req) // 31st March 2026
+    {
+        $province_id = $req->input('province_id');
+        $district_id = $req->input('district_id');
+        $year = $req->input('year');
+        $term = $req->input('term');
+        $start = $req->input('start');
+        $limit = $req->input('limit');
+        try {
+            $qry = DB::table('beneficiary_payresponses_report as t5')
+                ->select(DB::raw('t7.name as term_name,t5.year_of_enrollment,t2.name as school_name,
+                                  count(t5.beneficiary_id) as no_of_beneficiaries,
+                                  sum(t5.total_payable_fees) as total_fees'))
+                ->join('school_information as t2', 't5.school_id', '=', 't2.id')
+                ->leftJoin('school_terms as t7', 't5.term_id', '=', 't7.id');
 
-public function getBeneficiary_requestpaymentInfo(Request $req)
+            if (isset($province_id) && $province_id != '') {
+                $qry->where('t2.province_id', $province_id);
+            }
+            if (isset($district_id) && $district_id != '') {
+                $qry->where('t2.district_id', $district_id);
+            }
+            if (isset($year) && $year != '') {
+                $qry->where('t5.year_of_enrollment', $year);
+            }
+            if (isset($term) && $term != '') {
+                $qry->where('t5.term_id', $term);
+            }
+            $qry->groupBy('t5.school_id', 't5.year_of_enrollment');//, 't6.term_id');
+            $total = count($qry->get());
+            $qry->offset($start)
+                ->limit($limit);
+            $results = $qry->get();
+            $res = array(
+                'success' => true,
+                'results' => $results,
+                'totalCount' => $total,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => true,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    public function getBeneficiary_requestpaymentInfoOld(Request $req)
     {
         try {
             $payment_request_id = $req->input('payment_request_id');
@@ -4962,7 +5134,8 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
         ini_set('max_execution_time', $normalTimeLimit); //Job on 03/11/2022
         return response()->json($res);
     }
-    public function getBeneficiary_requestpaymentInfoOld(Request $req)
+
+    public function getBeneficiary_requestpaymentInfo(Request $req) // 31st March 2026
     {
         try {
             $payment_request_id = $req->input('payment_request_id');
@@ -4971,16 +5144,32 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
             $district_id = $req->input('district_id');
             $school_status = $req->input('school_status');//job on 21/4/2022
             $school_fees_status = $req->input('school_fees_status');//job on 30/05/2022
-        
+            $new_entrants= $req->input('new_entrants');//job on 03/11/2022
+         
             if(isset($school_status) && $school_status!=null)
             {
             $school_status=explode(',',$school_status);
             }
-            $qry = DB::table('beneficiary_information as t1')
-                ->join('school_information as t2', 't1.school_id', '=', 't2.id')
+            if($school_status==null)//Job on 03/11/2022
+            {
+                $school_status = $req->input('school_status_id');
+                if($school_status!=null)
+                {
+                    $school_status=explode(',',$school_status);
+                }
+                
+            }
+           
+            // Get default limit
+            $normalTimeLimit = ini_get('max_execution_time');//Job on 03/11/2022
+
+            // Set new limit
+            ini_set('max_execution_time', 30000); 
+        
+            $qry = DB::table('beneficiary_payresponses_report as t5')
+                ->join('school_information as t2', 't5.school_id', '=', 't2.id')
                 ->leftJoin('districts as t3', 't2.district_id', '=', 't3.id')
                 ->leftJoin('provinces as t4', 't3.province_id', '=', 't4.id')
-                ->join('beneficiary_enrollments as t5', 't1.id', '=', 't5.beneficiary_id')
                 ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
                 ->join('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
                 //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
@@ -4988,10 +5177,14 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
                     $join->on('t8.payment_request_id', '=', 't11.payment_request_id');
                     $join->on('t2.id', '=', 't11.school_id');
                 })
-                ->select(DB::raw("t2.id as school_id, t1.id as beneficiary_id, t5.id as enrollment_id,t1.beneficiary_id as beneficiary_no, t5.year_of_enrollment,
-                (IFNULL(decrypt(t5.term1_fees),0) + IFNULL(decrypt(t5.term2_fees),0) + IFNULL(decrypt(t5.term3_fees),0) + IFNULL(decrypt(t5.exam_fees),0)) as school_fees,  decrypt(t5.term1_fees) as term1_fees,decrypt(t5.term2_fees) as term2_fees,
-                decrypt(t5.term3_fees) as term3_fees,decrypt(t5.exam_fees) as exam_fees, t5.school_grade, t1.dob, decrypt(t1.first_name) as first_name, decrypt(t1.last_name) as last_name,
-                t2.name as school_name,t2.name as school_name2, t3.name as school_district, t4.name as school_province,t7.name as school_status"))
+                ->select(DB::raw("t2.id as school_id, t5.girl_id as beneficiary_id, t5.id as enrollment_id,
+                t5.beneficiary_id as beneficiary_no, t5.year_of_enrollment,
+                t5.term1_fee as school_fees,  
+                t5.term1_fee as term1_fees,0 as term2_fees,
+                0 as term3_fees,t5.exam_fees as exam_fees, t5.confirmed_grade as school_grade, 
+                t5.verified_dob as dob, t5.first_name, t5.surname as last_name,
+                t2.name as school_name,t2.name as school_name2, t3.name as school_district, 
+                t4.name as school_province,t7.name as school_status"))
                 ->where(array('t8.payment_request_id' => $payment_request_id))
                 ->whereRaw("IF(`t8`.`payment_request_id` = `t11`.`payment_request_id`, `payment_status_id` = 1,1)");
             
@@ -5005,16 +5198,8 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
             if (isset($district_id) && $district_id != '') {
                 $qry->where('t3.id', $district_id);
             }
-
-            if(isset($school_fees_status) && $school_fees_status!="")//Job on 30/05/2022
-            {
-                if($school_fees_status==1){
-                $qry->whereRaw('decrypt(t5.annual_fees)>0');
-                }else{
-                    $qry->whereRaw('decrypt(t5.annual_fees)=0');
-                }
-            }
-            $results = $qry->get();
+            $results = $qry->get()->toArray();
+            
             $res = array(
                 'success' => true,
                 'results' => $results,
@@ -5031,64 +5216,12 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
                 'message' => $throwable->getMessage()
             );
         }
+        ini_set('max_execution_time', $normalTimeLimit); //Job on 03/11/2022
         return response()->json($res);
     }
+    
 
-
-    public function getValidatedBenschoolsPaymentinfo2(Request $req)
-    {
-        $term_id = $req->input('term_id');
-        $year_of_enrollment = $req->input('payment_year');
-        $province_id = $req->input('province_id');
-        $district_id = $req->input('district_id');
-        $start = $req->input('start');
-        $limit = $req->input('limit');
-        try {
-            $qry = DB::table('beneficiary_enrollments as t5')
-                ->select(DB::raw(' t2.id as school_id, t2.name as school_name, t5.year_of_enrollment,
-                                   t4.name as  province_name, t3.name as district_name, count(t5.beneficiary_id) as no_of_beneficiary,
-                                   sum(decrypt(t5.annual_fees)) as school_feessummary'))
-                ->join('school_information as t2', 't5.school_id', '=', 't2.id')
-                ->join('districts as t3', 't2.district_id', '=', 't3.id')
-                ->join('provinces as t4', 't3.province_id', '=', 't4.id')
-                ->join('payment_verificationbatch as t6', 't5.batch_id', '=', 't6.id')
-                ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
-                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
-                //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
-                ->whereNull('t8.payment_request_id')
-                ->where(array('t5.is_validated' => 1, 't5.submission_status' => 2, 't5.year_of_enrollment' => $year_of_enrollment));
-            if (isset($province_id) && $province_id != '') {
-                $qry->where('t2.province_id', $province_id);
-            }
-            if (isset($district_id) && $district_id != '') {
-                $qry->where('t2.district_id', $district_id);
-            }
-            $qry->groupBy('t2.id');
-            $total = count($qry->get());
-            $qry->offset($start)
-                ->limit($limit);
-            $results = $qry->get();
-            $res = array(
-                'success' => true,
-                'results' => $results,
-                'totalCount' => $total,
-                'message' => 'All is well'
-            );
-        } catch (\Exception $e) {
-            $res = array(
-                'success' => false,
-                'message' => $e->getMessage()
-            );
-        } catch (\Throwable $t) {
-            $res = array(
-                'success' => false,
-                'message' => $t->getMessage()
-            );
-        }
-        return response()->json($res);
-    }
-
-      public function getValidatedBenschoolsPaymentinfo(Request $req)
+    public function getValidatedBenschoolsPaymentinfoOld(Request $req)
     {
         $term_id = $req->input('term_id');
         $year_of_enrollment = $req->input('payment_year');
@@ -5227,6 +5360,186 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
         }
         return response()->json($res);
     }
+    public function getValidatedBenschoolsPaymentinfo(Request $req) // 31st March 2026
+    {
+        $term_id = $req->input('term_id');
+        $year_of_enrollment = $req->input('payment_year');
+        $province_id = $req->input('province_id');
+        $district_id = $req->input('district_id');
+        $start = $req->input('start');
+        $limit = $req->input('limit');
+
+        $school_status = $req->input('school_status');//job on 20/4/2022
+        $running_agency_details=$req->input('running_agency');//27/04/2022
+        if(isset($school_status) && $school_status!=null && $school_status!="")
+        {
+        $school_status=explode(',',$school_status);
+        }
+       
+        if(isset($running_agency_details) && $running_agency_details!=null)
+        {
+        $running_agency_details=explode(',',$running_agency_details);
+        }
+        
+        
+        try {
+            $qry = DB::table('beneficiary_payresponses_report as t5')
+             ->select(DB::raw(' t2.id as school_id, t2.name as school_name, t5.year_of_enrollment,
+                t4.name as  province_name, t3.name as district_name, count(t5.beneficiary_id) as no_of_beneficiary,
+                sum(t5.total_payable_fees) as school_feessummary,t12.name as running_agency'))
+                ->join('school_information as t2', 't5.school_id', '=', 't2.id')
+                ->leftjoin('school_running_agencies as t12','t2.running_agency_id','t12.id')
+                ->join('districts as t3', 't2.district_id', '=', 't3.id')
+                ->join('provinces as t4', 't3.province_id', '=', 't4.id')
+                // ->join('payment_verificationbatch as t6', 't5.batch_id', '=', 't6.id')
+                ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
+                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
+
+                
+                //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
+                ->whereNull('t8.payment_request_id')
+                // ->where('t8.created_at', '>', '2026-03-30 00:00:00')
+                // ->where('t8.payment_request_id', '!=', 55)
+                ->where(array('t5.year_of_enrollment' => $year_of_enrollment));
+            if (isset($province_id) && $province_id != '') {
+                $qry->where('t2.province_id', $province_id);
+            }
+            if (isset($district_id) && $district_id != '') {
+                $qry->where('t2.district_id', $district_id);
+            }
+            if(is_array($school_status) &&  count($school_status)>0)//job on 20/04/2022
+            {
+               $qry->whereIn('beneficiary_schoolstatus_id',$school_status);//job on 19/4/2022;
+            }
+
+             //27/04/2022
+             if(is_array($running_agency_details) && count($running_agency_details)>0)
+             {
+                 
+                 $qry->whereIn('running_agency_id',$running_agency_details);
+             }
+            $qry->groupBy('t2.id');
+            $total = count($qry->get());
+            $qry->offset($start)
+                ->limit($limit);
+
+              
+            $results = $qry->get();
+            // $res = array(
+            //     'success' => true,
+            //     'results' => $results,
+            //     'totalCount' => $total,
+            //     'message' => 'All is well'
+            // );
+            $res = array(
+                'success' => true,
+                'results' => null,
+                'totalCount' => null,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        } catch (\Throwable $t) {
+            $res = array(
+                'success' => false,
+                'message' => $t->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+
+    public function getValidatedBenschoolsPaymentinfoExperimental(Request $req)
+    {
+        $term_id = 1;//$req->input('term_id');
+        $year_of_enrollment = $req->input('payment_year');
+        $province_id = $req->input('province_id');
+        $district_id = $req->input('district_id');
+        $start = $req->input('start');
+        $limit = $req->input('limit');
+        $school_status = $req->input('school_status');
+        $running_agency_details = $req->input('running_agency');
+
+        if (isset($school_status) && $school_status != null && $school_status != "") {
+            $school_status = explode(',', $school_status);
+        }
+        if (isset($running_agency_details) && $running_agency_details != null) {
+            $running_agency_details = explode(',', $running_agency_details);
+        }
+        
+        try {
+            // Get the latest payment_request_id for this term and year
+            $latestPaymentRequest = DB::table('beneficiary_payment_records')
+                ->where('payment_term', 1)
+                // ->where('payment_year', $year_of_enrollment)
+                ->orderBy('id', 'desc')
+                ->first();
+                
+            $payment_request_id = $latestPaymentRequest ? $latestPaymentRequest->payment_request_id : null;
+
+            $qry = DB::table('beneficiary_payresponses_report as t5')
+                ->select(DB::raw('t2.id as school_id, t2.name as school_name, t5.year_of_enrollment,
+                    t4.name as province_name, t3.name as district_name, count(t5.beneficiary_id) as no_of_beneficiary,
+                    sum(t5.total_payable_fees) as school_feessummary, t12.name as running_agency'))
+                ->join('school_information as t2', 't5.school_id', '=', 't2.id')
+                ->leftjoin('school_running_agencies as t12', 't2.running_agency_id', 't12.id')
+                ->join('districts as t3', 't2.district_id', '=', 't3.id')
+                ->join('provinces as t4', 't3.province_id', '=', 't4.id')
+                ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
+                ->where(array('t5.year_of_enrollment' => $year_of_enrollment));
+
+            // Only exclude if we found a payment request
+            if ($payment_request_id) {
+                $qry->whereNotExists(function ($query) use ($payment_request_id) {
+                    $query->select(DB::raw(1))
+                        ->from('beneficiary_payment_records as t8')
+                        ->join('beneficiary_payresponses_report as t5_sub', 't8.enrollment_id', '=', 't5_sub.id')
+                        ->whereColumn('t5_sub.school_id', 't2.id')
+                        ->where('t8.payment_request_id', $payment_request_id);
+                });
+            }
+
+            if (isset($province_id) && $province_id != '') {
+                $qry->where('t2.province_id', $province_id);
+            }
+            if (isset($district_id) && $district_id != '') {
+                $qry->where('t2.district_id', $district_id);
+            }
+            if (is_array($school_status) && count($school_status) > 0) {
+                $qry->whereIn('beneficiary_schoolstatus_id', $school_status);
+            }
+            if (is_array($running_agency_details) && count($running_agency_details) > 0) {
+                $qry->whereIn('running_agency_id', $running_agency_details);
+            }
+            
+            $qry->groupBy('t2.id');
+            $total = count($qry->get());
+            $qry->offset($start)->limit($limit);
+
+            $results = $qry->get();
+            
+            $res = array(
+                'success' => true,
+                'results' => $results,
+                'totalCount' => $total,
+                'message' => 'All is well',
+                'payment_request_id_used' => $payment_request_id // for debugging
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        } catch (\Throwable $t) {
+            $res = array(
+                'success' => false,
+                'message' => $t->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
     public function getValidatedBeneficiariesPaymentinfo(Request $req)
     {
         $term_id = $req->input('term_id');
@@ -5254,56 +5567,6 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
         //var_dump($res);
         json_output($res);
 
-    }
-
-    public function getBeneficiary_requestpaymentInfoCopy(Request $req)
-    {
-        try {
-            $payment_request_id = $req->input('payment_request_id');
-            $payment_status_id = $req->input('payment_status_id');
-            $province_id = $req->input('province_id');
-            $district_id = $req->input('district_id');
-            $qry = DB::table('beneficiary_information as t1')
-                ->join('school_information as t2', 't1.school_id', '=', 't2.id')
-                ->leftJoin('districts as t3', 't2.district_id', '=', 't3.id')
-                ->leftJoin('provinces as t4', 't3.province_id', '=', 't4.id')
-                ->join('beneficiary_enrollments as t5', 't1.id', '=', 't5.beneficiary_id')
-                ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
-                ->join('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
-                //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
-                ->leftJoin('payment_disbursement_details as t11', function ($join) {
-                    $join->on('t8.payment_request_id', '=', 't11.payment_request_id');
-                    $join->on('t2.id', '=', 't11.school_id');
-                })
-                ->select(DB::raw("t2.id as school_id, t1.id as beneficiary_id, t5.id as enrollment_id,t1.beneficiary_id as beneficiary_no, t5.year_of_enrollment,
-                decrypt(t5.annual_fees) as school_fees, t5.school_grade, t1.dob, decrypt(t1.first_name) as first_name, decrypt(t1.last_name) as last_name,
-                t2.name as school_name, t3.name as school_district, t4.name as school_province,t7.name as school_status"))
-                ->where(array('t8.payment_request_id' => $payment_request_id))
-                ->whereRaw("IF(`t8`.`payment_request_id` = `t11`.`payment_request_id`, `payment_status_id` = 1,1)");
-            if (isset($province_id) && $province_id != '') {
-                $qry->where('t4.id', $province_id);
-            }
-            if (isset($district_id) && $district_id != '') {
-                $qry->where('t3.id', $district_id);
-            }
-            $results = $qry->get();
-            $res = array(
-                'success' => true,
-                'results' => $results,
-                'message' => 'All is well'
-            );
-        } catch (\Exception $exception) {
-            $res = array(
-                'success' => false,
-                'message' => $exception->getMessage()
-            );
-        } catch (\Throwable $throwable) {
-            $res = array(
-                'success' => false,
-                'message' => $throwable->getMessage()
-            );
-        }
-        return response()->json($res);
     }
 
     public function submitsinglePaymentreconcolliation(Request $req)
@@ -5470,7 +5733,7 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
 
     }
 
-     public function getSchoolpaymentschoolSummary(Request $req)
+    public function getSchoolpaymentschoolSummaryOld(Request $req)
     {
         try {
 
@@ -5533,6 +5796,105 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
                 ->leftJoin('payment_disbursement_status as t12', 't11.payment_status_id', '=', 't12.id')
                 ->where(array('t8.payment_request_id' => $payment_request_id))
                 ->whereRaw("IF(`t8`.`payment_request_id` = `t11`.`payment_request_id`, `payment_status_id` = 1,1)");
+            if (isset($filter_id) && $filter_id != '') {
+                if ($filter_id == 1) {
+                    $qry->whereNotNull('t11.id');
+                }
+                if ($filter_id == 2) {
+                    $qry->whereNull('t11.id');
+                }
+            }
+             ///04/2022
+             if(is_array($running_agency_details) && count($running_agency_details)>0) {                 
+                $qry->whereIn('running_agency_id',$running_agency_details);
+             }
+           
+            if(is_array($school_status) &&  count($school_status)>0)//job on 21/04/2022
+            {
+                $qry->whereIn('t5.beneficiary_schoolstatus_id',$school_status);//job on 21/4/2022;
+            }
+            if (isset($province_id) && $province_id != '') {
+                $qry->where('t4.id', $province_id);
+            }
+            if (isset($district_id) && $district_id != '') {
+                $qry->where('t3.id', $district_id);
+            }
+            $qry->groupBy('t2.id');
+            $total = count($qry->get());
+            $qry->offset($start)
+               ->limit($limit);
+            $results = $qry->get();
+
+            $res = array(
+                'success' => true,
+                'results' => $results,
+                'totalCount' => $total,
+                'message' => 'All is well'
+            );
+        } catch (\Exception $e) {
+            $res = array(
+                'success' => false,
+                'message' => $e->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+    public function getSchoolpaymentschoolSummary(Request $req) // 31st March 2026
+    {
+        try {
+
+            $payment_request_id = $req->input('payment_request_id');
+            $filter_id = $req->input('filter_id');
+            $province_id = $req->input('province_id');
+            $district_id = $req->input('district_id');
+            $start = $req->input('start');
+            $limit = $req->input('limit');
+            $school_status = $req->input('school_status');//job on 21/4/2022
+            $running_agency_details=$req->input('running_agency_id');
+            $skip=$start-1;//job on 6/6/2022
+         
+            if(isset($school_status) && $school_status!=null)
+            {
+            $school_status=explode(',',$school_status);
+            }
+            if(isset($running_agency_details) && $running_agency_details!=null)
+            {
+            $running_agency_details=explode(',',$running_agency_details);
+            }
+            $qry = DB::table('beneficiary_payresponses_report as t5')
+                ->select(DB::raw('t12.name as payment_status, t11.id as 
+                    payment_disbursement_id,decrypt(t11.amount_transfered) as 
+                    amount_transfered,t11.imbalance_reason,t11.school_bank_id,
+                    decrypt(t11.transaction_no) as transaction_no,
+                    date(t11.transaction_date) as transaction_date,t11.remarks, 
+                    t2.id as school_id,t8.payment_request_id,
+                    b1.name as bank_name,b2.name as 
+                    branch_name,t9.bank_id,decrypt(t9.account_no) as 
+                    account_no,b2.sort_code,count(t5.id) as no_of_beneficiary,
+
+                    t5.total_payable_fees as school_feessummary,
+                    t5.total_payable_fees as payable_amount,
+                    t2.name as school_name,t3.name as district_name,
+                    t4.name as province_name,t13.name as running_agency'))
+                ->join('school_information as t2', 't2.id', '=', 't5.school_id')
+                ->leftjoin('school_running_agencies as t13','t2.running_agency_id',
+                    't13.id')//job on 4/05/2022
+                ->join('districts as t3', 't2.district_id', '=', 't3.id')
+                ->join('provinces as t4', 't3.province_id', '=', 't4.id')
+                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 
+                't8.enrollment_id')
+                ->leftJoin('payment_disbursement_details as t11', function ($join) {
+                    $join->on('t8.payment_request_id', '=', 't11.payment_request_id');
+                    $join->on('t2.id', '=', 't11.school_id');
+                })
+                ->leftJoin('school_bankinformation as t9', 't11.school_bank_id', '=', 't9.id')
+                ->leftJoin('bank_details as b1', 't9.bank_id', '=', 'b1.id')
+                ->leftJoin('bank_branches as b2', 't9.branch_name', '=', 'b2.id')
+                ->leftJoin('payment_disbursement_status as t12', 
+                't11.payment_status_id', '=', 't12.id')
+                ->where(array('t8.payment_request_id' => $payment_request_id))
+                ->whereRaw("IF(`t8`.`payment_request_id` = `t11`.`payment_request_id`, 
+                `payment_status_id` = 1,1)");
             if (isset($filter_id) && $filter_id != '') {
                 if ($filter_id == 1) {
                     $qry->whereNotNull('t11.id');
@@ -6149,7 +6511,7 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
     }
 
     
-    public function func_submitforpaymentApproval(Request $req)
+    public function func_submitforpaymentApprovalOld(Request $req)
     {
         $payment_request_id = $req->input('payment_request_id');
         $status_id = $req->input('status_id');
@@ -6169,6 +6531,83 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
                 );
                 return response()->json($res);
             }
+            if (validateisNumeric($payment_request_id)) {
+                $where = array('id' => $payment_request_id);
+                $records = DB::table('beneficiary_payment_records')
+                    ->where(array('payment_request_id' => $payment_request_id))
+                    ->count();
+                if ($records > 0) {
+                    $data['updated_at'] = Carbon::now();
+                    $data['updated_by'] = $this->user_id;
+                    $previous_data = getPreviousRecords($table_name, $where);
+                    $success = updateRecord($table_name, $previous_data, $where, $data, $this->user_id);
+                    //save the record in the transitional table
+                    $previous_status_id = $previous_data[0]['status_id'];
+                    $table_name = 'payment_verificationtransitionsubmissions';
+                    //save the details in the transitional table
+                    $data = array(
+                        'payment_request_id' => $payment_request_id,
+                        'previous_status_id' => $previous_status_id,
+                        'next_status_id' => $status_id,
+                        'released_on' => Carbon::now(),
+                        'released_by' => $this->user_id
+                    );
+                    $data['created_at'] = Carbon::now();
+                    $data['created_by'] = $this->user_id;
+                    insertRecord($table_name, $data, $this->user_id);
+                } else {
+                    $res = array(
+                        'success' => false,
+                        'message' => 'Add Payment enrollment details to payment request!!'
+                    );
+                    return response()->json($res);
+                }
+            }
+            if ($success) {
+                $res = array(
+                    'success' => true,
+                    'message' => 'Payment Request Details submitted successfully for Payment Approval Process!!'
+                );
+            } else {
+                $res = array(
+                    'success' => false,
+                    'message' => 'Problem encountered while saving data. Try again later!!'
+                );
+
+            }
+        } catch (\Exception $exception) {
+            $res = array(
+                'success' => false,
+                'message' => $exception->getMessage()
+            );
+        } catch (\Throwable $throwable) {
+            $res = array(
+                'success' => false,
+                'message' => $throwable->getMessage()
+            );
+        }
+        return response()->json($res);
+    }
+    public function func_submitforpaymentApproval(Request $req) // 31st March 2026
+    {
+        $payment_request_id = $req->input('payment_request_id');
+        $status_id = $req->input('status_id');
+        $remark = $req->input('request_comment');
+        $data = array(
+            'status_id' => $status_id,
+            'request_comment' => $remark
+        );
+        $table_name = 'payment_request_details';
+        $success = false;
+        try {
+            // $duplicates_exist = checkEnrollmentDuplicates($payment_request_id);
+            // if ($duplicates_exist == true) {
+            //     $res = array(
+            //         'success' => false,
+            //         'message' => 'Duplicates found, please process duplicates before attempting this action!!'
+            //     );
+            //     return response()->json($res);
+            // }
             if (validateisNumeric($payment_request_id)) {
                 $where = array('id' => $payment_request_id);
                 $records = DB::table('beneficiary_payment_records')
@@ -12920,7 +13359,7 @@ public function uploadPaymentGrantList(Request $request)
             $school_guidance_teacher_name = $req->input('guidance_counselling_teacher');
             $school_guidance_teacher_phone = $req->input('guidance_counselling_teacher_phone_no');
             $where_data = array(
-                'designation_id' => "1",
+                'designation_id' => 1,
                 'school_id' => $school_id
             );
             $table_data = array(
@@ -12934,7 +13373,7 @@ public function uploadPaymentGrantList(Request $request)
             //job  16/3/2022
             //school guidance teacher info
             $where_data = array(
-                'designation_id' => "2",//school guidance designation
+                'designation_id' => 2,//school guidance designation
                 'school_id' => $school_id
             );
             $table_data = array(
