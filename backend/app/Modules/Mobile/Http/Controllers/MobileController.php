@@ -5815,7 +5815,7 @@ class MobileController extends Controller
     }
 
 
-    public function getImages(Request $request)
+    public function getImagesv1(Request $request)
     {
         $uuidsRaw = $request->query('uuids');
         
@@ -5844,7 +5844,7 @@ class MobileController extends Controller
         }
 
         // Query table
-        $rows = DB::table('sa_app_beneficiary_images')
+        $rows = DB::table('sa_app_beneficiary_images_new')
             ->whereIn('image_id', $uuidList)
             ->get();
 
@@ -5855,7 +5855,64 @@ class MobileController extends Controller
         ]);
     }
 
+    //new function that gets images from file using filepath
+    public function getImages(Request $request)
+    {
+        $uuidsRaw = $request->query('uuids');
+        
+        if (!$uuidsRaw) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No UUIDs provided.'
+            ], 400);
+        }
 
+        // Convert to array
+        $uuidList = array_filter(array_map('trim', explode(',', $uuidsRaw)));
+
+        // Remove invalid values
+        $invalidValues = ["", "n/a", "na", "none", "null", "undefined"];
+
+        $uuidList = array_filter($uuidList, function ($val) use ($invalidValues) {
+            return !in_array(strtolower($val), $invalidValues);
+        });
+
+        if (empty($uuidList)) {
+            return response()->json([
+                'status' => true,
+                'images' => []
+            ]);
+        }
+
+        // Fetch from DB
+        $rows = DB::table('sa_app_beneficiary_images_new')
+            ->whereIn('image_id', $uuidList)
+            ->get();
+
+        // 🔥 Transform image paths → full URLs
+        $images = $rows->map(function ($row) {
+
+            return [
+                'image_id' => $row->image_id,
+                'beneficiary_number' => $row->beneficiary_number,
+                'image_category' => $row->image_category,
+                'image_description' => $row->image_description,
+
+                // ✅ Convert to full URL
+                'image_url' => !empty($row->image_url) 
+                    ? asset($row->image_url) 
+                    : null,
+
+                'created_at' => $row->created_at
+            ];
+        });
+
+        return response()->json([
+            'status' => true,
+            'count' => $images->count(),
+            'images' => $images
+        ]);
+    }
 
     public function migrateBeneficiariesToReport()
     {
