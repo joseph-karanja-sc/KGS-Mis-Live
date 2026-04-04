@@ -697,7 +697,7 @@ class MobileController extends Controller
                 ]);
                 return response()->json([
                     'Message' => 'Some records failed to process',
-                    // 'Errors' => $errors,
+                    'Errors' => $errors,
                     'SuccessCount' => $successCount
                 ], 422);
             }
