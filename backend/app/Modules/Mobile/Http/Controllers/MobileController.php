@@ -1116,7 +1116,6 @@ class MobileController extends Controller
                 throw new \Exception("Empty base64 image provided");
             }
 
-            // Remove base64 header
             $base64Image = preg_replace('#^data:image/\w+;base64,#i', '', $base64Image);
 
             $imageData = base64_decode($base64Image, true);
@@ -1130,15 +1129,13 @@ class MobileController extends Controller
 
             $fileName = "img{$beneficiaryNumber}_{$year}_{$month}_" . uniqid() . ".jpg";
 
-            // 🔥 NEW FOLDER
             $folder = 'sch_acc_app_images';
 
             $directory = public_path("img/{$folder}");
 
+            // 🔥 STRICT CHECK (no creation)
             if (!is_dir($directory)) {
-                if (!mkdir($directory, 0777, true) && !is_dir($directory)) {
-                    throw new \Exception("Failed to create directory: {$directory}");
-                }
+                throw new \Exception("Directory does not exist: {$directory}");
             }
 
             $filePath = $directory . '/' . $fileName;
@@ -1149,13 +1146,13 @@ class MobileController extends Controller
                 throw new \Exception("Failed to write image to disk: {$filePath}");
             }
 
-            // return RELATIVE PATH (better than full URL)
             return "/img/{$folder}/{$fileName}";
 
         } catch (\Exception $e) {
 
             \Log::error("saveSchoolAppImage failed", [
                 'beneficiary_number' => $beneficiaryNumber,
+                'directory' => $directory ?? null,
                 'error' => $e->getMessage()
             ]);
 
