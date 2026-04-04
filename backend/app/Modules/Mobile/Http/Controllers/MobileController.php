@@ -599,7 +599,7 @@ class MobileController extends Controller
         ->value('school_name');
 
         // Fetch existing payment batch id from table
-        $existingBatch = DB::table('sa_app_beneficiary_list_4')
+        $existingBatch = DB::table('sa_app_beneficiary_list_5')
             ->where('school_id', $schoolId)
             ->whereNotNull('sch_pay_bat_id')
             ->value('sch_pay_bat_id');
@@ -613,7 +613,7 @@ class MobileController extends Controller
         $paymentBatchId = $existingBatch;
 
         // Fetch Beneficiaries
-        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
+        $beneficiaries = DB::table('sa_app_beneficiary_list_5')
             ->where('school_id', $schoolId)
             ->where('payment_status_id', 1)
             ->select(DB::raw("
@@ -2109,7 +2109,7 @@ class MobileController extends Controller
     public function generateTransactionIds()
     {
         // Fetch all records where transaction_id is NULL
-        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
+        $beneficiaries = DB::table('sa_app_beneficiary_list_5')
             ->whereNull('transaction_id')
             ->get();
 
@@ -2136,7 +2136,7 @@ class MobileController extends Controller
 
         // Perform updates in a loop (or use batch update if preferred)
         foreach ($updates as $update) {
-            DB::table('sa_app_beneficiary_list_4')
+            DB::table('sa_app_beneficiary_list_5')
                 ->where('id', $update['id'])
                 ->update([
                     'transaction_id' => $update['transaction_id'],
@@ -5703,7 +5703,7 @@ class MobileController extends Controller
          * ---------------------
          * Transactions (t1) may reference beneficiaries that exist in:
          *  - sa_app_beneficiary_list_3 (older snapshot)
-         *  - sa_app_beneficiary_list_4 (newer snapshot)
+         *  - sa_app_beneficiary_list_5 (newer snapshot)
          *
          * To avoid LOSING valid transactions, we:
          *  - LEFT JOIN both beneficiary tables
@@ -5726,7 +5726,7 @@ class MobileController extends Controller
 
             // Newer beneficiary snapshot
             ->leftJoin(
-                'sa_app_beneficiary_list_4 as b4',
+                'sa_app_beneficiary_list_5 as b4',
                 'b4.beneficiary_no',
                 '=',
                 't1.beneficiary_no'
