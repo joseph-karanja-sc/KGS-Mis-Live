@@ -614,9 +614,9 @@ class MobileController extends Controller
                     'PaymentStatus'          => 'required|string',
                     'ImageIDs'               => 'required|array',
                     'DateReceived'           => 'required|date',
-                    'GpsLatitude'            => 'required', // Removed |required to test
-                    'GpsLongitude'           => 'required',
-                    'GpsAltitude'            => 'required',
+                    'GpsLatitude'            => 'nullable', // Removed |required to test
+                    'GpsLongitude'           => 'nullable',
+                    'GpsAltitude'            => 'nullable',
                     'GpsTimestamp'           => 'required|date',
                     'SchoolAccountantDetails'=> 'required|string',
                 ]);
@@ -642,7 +642,7 @@ class MobileController extends Controller
                     Log::info($item['TransactionId'] . ": Lat: ".$item['GpsLatitude']." Long: ".$item['GpsLongitude']." Alt: ". $item['GpsAltitude']);
 
                     // 🔥 ALWAYS INSERT (no duplicate check)
-                    DB::table('beneficiary_transaction_status')->insert([
+                    DB::table('sa_app_beneficiary_transaction_status')->insert([
                         'payment_request_id' => $paymentRequestId, // ✅ NEW FIELD
 
                         'transaction_id' => $item['TransactionId'],
@@ -651,10 +651,12 @@ class MobileController extends Controller
                         'payment_status_id' => $statusId,
                         'images' => implode(',', $item['ImageIDs']),
                         'date_received' => $item['DateReceived'],
-                        'gps_latitude' => $item['GpsLatitude'],
-                        'gps_longitude' => $item['GpsLongitude'],
-                        'gps_altitude' => $item['GpsAltitude'],
-                        'gps_timestamp' => (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s'),
+                        'gps_latitude'  => $item['GpsLatitude'] ?? null,
+                        'gps_longitude' => $item['GpsLongitude'] ?? null,
+                        'gps_altitude'  => $item['GpsAltitude'] ?? null,
+                        'gps_timestamp' => !empty($item['GpsTimestamp']) 
+                        ? (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s') 
+                        : null,
                         'school_accountant_details' => $item['SchoolAccountantDetails'],
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -670,7 +672,7 @@ class MobileController extends Controller
                     ]);
 
                     // Update related table (still fine to keep)
-                    DB::table('sa_app_beneficiary_list_4')
+                    DB::table('sa_app_beneficiary_list_5')
                         ->where('transaction_id', $item['TransactionId'])
                         ->update([
                             'payment_status' => $item['PaymentStatus'],
@@ -1041,7 +1043,7 @@ class MobileController extends Controller
                     );
 
                     // 🔥 STORE PATH IN DB (NOT BASE64)
-                    DB::table('sa_app_beneficiary_images')->insert([
+                    DB::table('sa_app_beneficiary_images_new')->insert([
                         'beneficiary_number' => $item['BeneficiaryNumber'],
                         'image_id'           => $item['ImageId'],
                         'image_category'     => (int) $item['ImageCategory'],
