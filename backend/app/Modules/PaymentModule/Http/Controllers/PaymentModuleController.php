@@ -5178,12 +5178,12 @@ public function getBeneficiary_requestpaymentInfo(Request $req)
                 ->leftjoin('school_running_agencies as t12','t2.running_agency_id','t12.id')
                 ->join('districts as t3', 't2.district_id', '=', 't3.id')
                 ->join('provinces as t4', 't3.province_id', '=', 't4.id')
-                ->join('payment_verificationbatch as t6', 't5.batch_id', '=', 't6.id')
+                ->leftJoin('payment_verificationbatch as t6', 't5.batch_id', '=', 't6.id')
                 ->leftJoin('beneficiary_school_statuses as t7', 't5.beneficiary_schoolstatus_id', '=', 't7.id')
-                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id')
+                ->leftJoin('beneficiary_payment_records as t8', 't5.id', '=', 't8.enrollment_id');
                 //->join('school_terms as t9', 't5.term_id', '=', 't9.id')
-                ->whereNull('t8.payment_request_id')
-                ->where(array('t5.is_validated' => 1, 't5.submission_status' => 2, 't5.year_of_enrollment' => $year_of_enrollment));
+                // ->whereNull('t8.payment_request_id')
+                // ->where(array('t5.is_validated' => 1, 't5.submission_status' => 2, 't5.year_of_enrollment' => $year_of_enrollment));
             if (isset($province_id) && $province_id != '') {
                 $qry->where('t2.province_id', $province_id);
             }
