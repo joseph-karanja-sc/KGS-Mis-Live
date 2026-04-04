@@ -407,7 +407,7 @@ class MobileController extends Controller
         ->value('school_name');
 
         // Fetch existing payment batch id from table
-        $existingBatch = DB::table('sa_app_beneficiary_list_5')
+        $existingBatch = DB::table('sa_app_beneficiary_list_4')
             ->where('school_id', $schoolId)
             ->whereNotNull('sch_pay_bat_id')
             ->value('sch_pay_bat_id');
@@ -421,7 +421,7 @@ class MobileController extends Controller
         $paymentBatchId = $existingBatch;
 
         // Fetch Beneficiaries
-        $beneficiaries = DB::table('sa_app_beneficiary_list_5')
+        $beneficiaries = DB::table('sa_app_beneficiary_list_4')
             ->where('school_id', $schoolId)
             ->where('payment_status_id', 1)
             ->select(DB::raw("
