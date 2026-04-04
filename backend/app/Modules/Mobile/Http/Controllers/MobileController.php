@@ -631,52 +631,34 @@ class MobileController extends Controller
 
                 $statusId = $paymentStatusMap[$item['PaymentStatus']] ?? $paymentStatusMap['DEFAULT'];
 
+                //new try
                 try {
                     DB::beginTransaction();
 
-                    // Check if record already exists
-                    $existing = DB::table('beneficiary_transaction_status')
-                        ->where('transaction_id', $item['TransactionId'])
-                        ->first();
+                    // 🔥 Define payment request ID (hardcoded for now)
+                    $paymentRequestId = 'KGS/PAY/REQ/2026/0001';
 
-                    // test logging
+                    // 🔥 Logging (kept)
                     Log::info($item['TransactionId'] . ": Lat: ".$item['GpsLatitude']." Long: ".$item['GpsLongitude']." Alt: ". $item['GpsAltitude']);
 
-                    if ($existing) {
-                        // Update existing record
-                        DB::table('beneficiary_transaction_status')
-                            ->where('transaction_id', $item['TransactionId'])
-                            ->update([
-                                'beneficiary_no' => $item['BeneficiaryNo'],
-                                'payment_status' => $item['PaymentStatus'],
-                                'payment_status_id' => $statusId,
-                                'images' => implode(',', $item['ImageIDs']),
-                                'date_received' => $item['DateReceived'],
-                                'gps_latitude' => $item['GpsLatitude'],
-                                'gps_longitude' => $item['GpsLongitude'],
-                                'gps_altitude' => $item['GpsAltitude'],
-                                'gps_timestamp' => (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s'),
-                                'school_accountant_details' => $item['SchoolAccountantDetails'],
-                                'updated_at' => now(),
-                            ]);
-                    } else {
-                        // Insert new record
-                        DB::table('beneficiary_transaction_status')->insert([
-                            'transaction_id' => $item['TransactionId'],
-                            'beneficiary_no' => $item['BeneficiaryNo'],
-                            'payment_status' => $item['PaymentStatus'],
-                            'payment_status_id' => $statusId,
-                            'images' => implode(',', $item['ImageIDs']),
-                            'date_received' => $item['DateReceived'],
-                            'gps_latitude' => $item['GpsLatitude'],
-                            'gps_longitude' => $item['GpsLongitude'],
-                            'gps_altitude' => $item['GpsAltitude'],
-                            'gps_timestamp' => (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s'),
-                            'school_accountant_details' => $item['SchoolAccountantDetails'],
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                    }
+                    // 🔥 ALWAYS INSERT (no duplicate check)
+                    DB::table('beneficiary_transaction_status')->insert([
+                        'payment_request_id' => $paymentRequestId, // ✅ NEW FIELD
+
+                        'transaction_id' => $item['TransactionId'],
+                        'beneficiary_no' => $item['BeneficiaryNo'],
+                        'payment_status' => $item['PaymentStatus'],
+                        'payment_status_id' => $statusId,
+                        'images' => implode(',', $item['ImageIDs']),
+                        'date_received' => $item['DateReceived'],
+                        'gps_latitude' => $item['GpsLatitude'],
+                        'gps_longitude' => $item['GpsLongitude'],
+                        'gps_altitude' => $item['GpsAltitude'],
+                        'gps_timestamp' => (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s'),
+                        'school_accountant_details' => $item['SchoolAccountantDetails'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
 
                     // Log user activity
                     DB::table('sa_user_activity_logs')->insert([
@@ -687,7 +669,7 @@ class MobileController extends Controller
                         'created_at'    => now(),
                     ]);
 
-                    // Update related table
+                    // Update related table (still fine to keep)
                     DB::table('sa_app_beneficiary_list_4')
                         ->where('transaction_id', $item['TransactionId'])
                         ->update([
