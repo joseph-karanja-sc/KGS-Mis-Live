@@ -5997,10 +5997,9 @@ class MobileController extends Controller
                 'image_category' => $row->image_category,
                 'image_description' => $row->image_description,
 
-                // ✅ Convert to full URL
                 'image_url' => !empty($row->image_url) 
-                    ? asset($row->image_url) 
-                    : null,
+                ? url('/backend/public' . $row->image_url) 
+                : null,
 
                 'created_at' => $row->created_at
             ];
