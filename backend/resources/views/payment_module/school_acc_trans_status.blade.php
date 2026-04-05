@@ -804,7 +804,7 @@ function openImagesTab(beneficiary, uuidString) {
         });
 }
 
-function renderImagesTab(images) {
+function renderImagesTabv1(images) {
 
     if (!images.length) {
         document.getElementById("tabContent").innerHTML = `
@@ -838,6 +838,40 @@ function renderImagesTab(images) {
     document.getElementById("tabContent").innerHTML = html;
     document.getElementById("tableFooter").style.display = "none";
 
+}
+
+function renderImagesTab(images) {
+
+    if (!images.length) {
+        document.getElementById("tabContent").innerHTML = `
+            <h2 style="color:#1b5e20;">No Images Found</h2>
+            <p class="muted">This beneficiary has no uploaded images.</p>`;
+        return;
+    }
+
+    let html = `
+        <h2 style="color:#1b5e20;">Images</h2>
+        <p class="muted">Below are images uploaded for this beneficiary.</p>
+
+        <div style="display:flex; gap:40px; flex-wrap:wrap; margin-top:20px;">`;
+
+    images.forEach(img => {
+
+        let label = (img.image_category === 1) ? "Beneficiary" : "Guardian";
+
+        html += `
+            <div style="text-align:center;">
+                <img src="${img.image_url}"
+                    onclick="openFullImage('${img.image_url}')"
+                    style="width:220px; border-radius:6px; border:1px solid #ccc; cursor: zoom-in;">
+
+                <div style="margin-top:6px; font-weight:600;">${label}</div>
+            </div>`;
+    });
+
+    html += "</div>";
+    document.getElementById("tabContent").innerHTML = html;
+    document.getElementById("tableFooter").style.display = "none";
 }
 
 function openFullImage(src) {
