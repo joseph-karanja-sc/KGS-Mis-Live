@@ -849,6 +849,16 @@ function renderImagesTab(images) {
         return;
     }
 
+    // ✅ Category mapping
+    const categoryMap = {
+        1: "Beneficiary Image",
+        2: "Beneficiary Signature",
+        3: "Guardian Image",
+        4: "Guardian Signature",
+        5: "G&C Teacher Image",
+        6: "G&C Teacher Signature"
+    };
+
     let html = `
         <h2 style="color:#1b5e20;">Images</h2>
         <p class="muted">Below are images uploaded for this beneficiary.</p>
@@ -857,7 +867,8 @@ function renderImagesTab(images) {
 
     images.forEach(img => {
 
-        let label = (img.image_category === 1) ? "Beneficiary" : "Guardian";
+        // 🔥 Use mapping (fallback safe)
+        let label = categoryMap[img.image_category] || "Unknown";
 
         html += `
             <div style="text-align:center;">
