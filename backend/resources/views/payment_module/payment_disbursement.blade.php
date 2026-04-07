@@ -606,6 +606,10 @@ function openSchoolSummary(refNo) {
                             <th>EMIS Code</th>
                             <th>Total Beneficiaries</th>
                             <th>Total Amount</th>
+                            <th>Bank Name</th>
+                            <th>Branch Name</th>
+                            <th>Account Number</th>
+                            <th>Sort Code</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -618,6 +622,10 @@ function openSchoolSummary(refNo) {
                         <td>${row.school_emis}</td>
                         <td>${row.total_beneficiaries}</td>
                         <td>${Number(row.total_amount).toLocaleString()}</td>
+                        <td>${row.school_bank ?? '-'}</td>
+                        <td>${row.school_branch ?? '-'}</td>
+                        <td>${row.school_bank_account ?? '-'}</td>
+                        <td>${row.school_sort_code ?? '-'}</td>
                     </tr>
                 `;
             });

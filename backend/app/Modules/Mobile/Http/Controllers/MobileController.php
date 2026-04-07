@@ -6114,6 +6114,7 @@ class MobileController extends Controller
                 't2.name as school_name',
                 't2.code as school_emis',
                 't1.bank_name as school_bank',
+                't1.branch_name as school_branch',
                 't1.bank_account as school_bank_account',
                 't1.sort_code as school_sort_code',
                 DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
