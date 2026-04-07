@@ -377,7 +377,7 @@ function exportData() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${currentCategory}_${currentPaymentRefNo}.csv`;
+    a.download = `Panel A_${currentCategory}_${currentPaymentRefNo}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
 }
