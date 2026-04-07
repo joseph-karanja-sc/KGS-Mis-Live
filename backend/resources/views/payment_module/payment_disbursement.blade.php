@@ -337,7 +337,7 @@
     <!-- HEADER -->
     <div class="header">
         <h2>Payment Disbursement</h2>
-        <button class="export-btn">Export ▼</button>
+        <button class="export-btn" id="exportBtn" style="display:none;" onclick="exportData()">Export ▼</button>
     </div>
 
     <div class="container">
@@ -358,6 +358,41 @@
 //  NAVIGATION STATE
 // ─────────────────────────────────────────────
 let breadcrumbStack = [];
+let currentCategory = null;
+let currentPaymentRefNo = null;
+
+function toggleExportBtn() {
+    const btn = document.getElementById("exportBtn");
+    btn.style.display = currentCategory ? "block" : "none";
+}
+
+function exportData() {
+    if (!currentCategory || !currentPaymentRefNo) return;
+    
+    const table = document.querySelector("#appContainer table");
+    if (!table) {
+        showToast("No data to export", "error");
+        return;
+    }
+    
+    let csv = [];
+    table.querySelectorAll("tr").forEach(row => {
+        let cells = [];
+        row.querySelectorAll("th, td").forEach(cell => {
+            cells.push('"' + cell.innerText.replace(/"/g, '""') + '"');
+        });
+        csv.push(cells.join(","));
+    });
+    
+    const csvContent = csv.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${currentCategory}_${currentPaymentRefNo}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+}
 
 function renderBreadcrumbs() {
     let html = `<a href="#" onclick="goHome()">Payments</a>`;
@@ -371,6 +406,9 @@ function renderBreadcrumbs() {
 
 function goHome() {
     breadcrumbStack = [];
+    currentCategory = null;
+    currentPaymentRefNo = null;
+    toggleExportBtn();
     loadSummary();
 }
 
@@ -566,6 +604,10 @@ function openPayment(refNo, category) {
 }
 
 function handleView(refNo, category) {
+
+    currentCategory = category;
+    currentPaymentRefNo = refNo;
+    toggleExportBtn();
 
     if (category === 'School Fees') {
         openSchoolSummary(refNo);
