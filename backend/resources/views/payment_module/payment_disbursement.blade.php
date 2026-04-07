@@ -870,12 +870,12 @@ function openPhaseSchools(refNo, phase) {
                         <tr>
                             <th>School Name</th>
                             <th>District</th>
-                            <th>Total Beneficiaries</th>
-                            <th>Total Amount</th>
                             <th>Bank Name</th>
                             <th>Branch</th>
                             <th>Account Number</th>
                             <th>Sort Code</th>
+                            <th>Total Beneficiaries</th>
+                            <th>Total Amount</th>
                             <th>Options</th>
                         </tr>
                     </thead>
@@ -887,14 +887,12 @@ function openPhaseSchools(refNo, phase) {
                     <tr>
                         <td>${row.school_name}</td>
                         <td>${row.district_name ?? row.school_district ?? '-'}</td>
-                        <td>${row.total_beneficiaries}</td>
-                        <td>${Number(row.total_amount).toLocaleString()}</td>
-
-                        <!-- New Bank Info Fields -->
                         <td>${row.bank_name ?? '-'}</td>
                         <td>${row.branch_name ?? '-'}</td>
                         <td>${row.account_number ?? '-'}</td>
                         <td>${row.sort_code ?? '-'}</td>
+                        <td>${row.total_beneficiaries}</td>
+                        <td>${Number(row.total_amount).toLocaleString()}</td>
 
                         <td>
                             <button onclick="openSchoolBeneficiaries('${refNo}', ${phase}, '${row.school_id ?? ''}')">
