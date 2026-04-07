@@ -6110,6 +6110,7 @@ class MobileController extends Controller
     {
         $data = DB::table('pg_school_fee_schedule as t1')
             ->leftJoin('school_information as t2', 't1.school_id', '=', 't2.id')
+            ->leftJoin('districts as t3', 't1.district_id', '=', 't3.id')
             ->select(
                 't2.name as school_name',
                 't2.code as school_emis',
@@ -6117,6 +6118,7 @@ class MobileController extends Controller
                 't1.branch_name as school_branch',
                 't1.bank_account as school_bank_account',
                 't1.sort_code as school_sort_code',
+                't3.name as district_name',
                 DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
                 DB::raw('SUM(t1.fee_amount) as total_amount')
             )

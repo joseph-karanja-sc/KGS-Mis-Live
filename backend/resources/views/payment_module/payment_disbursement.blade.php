@@ -646,6 +646,7 @@ function openSchoolSummary(refNo) {
                         <tr>
                             <th>School Name</th>
                             <th>EMIS Code</th>
+                            <th>District</th>
                             <th>Bank Name</th>
                             <th>Branch Name</th>
                             <th>Account Number</th>
@@ -662,6 +663,7 @@ function openSchoolSummary(refNo) {
                     <tr>
                         <td>${row.school_name}</td>
                         <td>${row.school_emis}</td>
+                        <td>${row.district_name ?? '-'}</td>
                         <td>${row.school_bank ?? '-'}</td>
                         <td>${row.school_branch ?? '-'}</td>
                         <td>${row.school_bank_account ?? '-'}</td>
