@@ -325,7 +325,7 @@
     <!-- HEADER -->
     <div class="header">
         <h2>Payment Disbursement(Panel A)</h2>
-        <button class="export-btn">Export ▼</button>
+        <button class="export-btn" id="exportBtn" style="display:none;" onclick="exportData()">Export ▼</button>
     </div>
 
     <div class="container">
@@ -346,6 +346,41 @@
 //  NAVIGATION STATE
 // ─────────────────────────────────────────────
 let breadcrumbStack = [];
+let currentCategory = null;
+let currentPaymentRefNo = null;
+
+function toggleExportBtn() {
+    const btn = document.getElementById("exportBtn");
+    btn.style.display = currentCategory ? "block" : "none";
+}
+
+function exportData() {
+    if (!currentCategory || !currentPaymentRefNo) return;
+    
+    const table = document.querySelector("#appContainer table");
+    if (!table) {
+        showToast("No data to export", "error");
+        return;
+    }
+    
+    let csv = [];
+    table.querySelectorAll("tr").forEach(row => {
+        let cells = [];
+        row.querySelectorAll("th, td").forEach(cell => {
+            cells.push('"' + cell.innerText.replace(/"/g, '""') + '"');
+        });
+        csv.push(cells.join(","));
+    });
+    
+    const csvContent = csv.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Panel A_${currentCategory}_${currentPaymentRefNo}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+}
 
 function showToast(message, type = "success") {
     const container = document.getElementById("toastContainer");
@@ -633,6 +668,11 @@ function openSchoolSummary(refNo) {
                         <tr>
                             <th>School Name</th>
                             <th>EMIS Code</th>
+                            <th>District</th>
+                            <th>Bank Name</th>
+                            <th>Branch Name</th>
+                            <th>Account Number</th>
+                            <th>Sort Code</th>
                             <th>Total Beneficiaries</th>
                             <th>Total Amount</th>
                         </tr>
@@ -645,6 +685,11 @@ function openSchoolSummary(refNo) {
                     <tr>
                         <td>${row.school_name}</td>
                         <td>${row.school_emis}</td>
+                        <td>${row.district_name ?? '-'}</td>
+                        <td>${row.school_bank ?? '-'}</td>
+                        <td>${row.school_branch ?? '-'}</td>
+                        <td>${row.school_bank_account ?? '-'}</td>
+                        <td>${row.school_sort_code ?? '-'}</td>
                         <td>${row.total_beneficiaries}</td>
                         <td>${Number(row.total_amount).toLocaleString()}</td>
                     </tr>
@@ -854,12 +899,12 @@ function openPhaseSchools(refNo, phase) {
                         <tr>
                             <th>School Name</th>
                             <th>District</th>
-                            <th>Total Beneficiaries</th>
-                            <th>Total Amount</th>
                             <th>Bank Name</th>
                             <th>Branch</th>
                             <th>Account Number</th>
                             <th>Sort Code</th>
+                            <th>Total Beneficiaries</th>
+                            <th>Total Amount</th>
                             <th>Options</th>
                         </tr>
                     </thead>
@@ -871,14 +916,14 @@ function openPhaseSchools(refNo, phase) {
                     <tr>
                         <td>${row.school_name}</td>
                         <td>${row.district_name ?? row.school_district ?? '-'}</td>
-                        <td>${row.total_beneficiaries}</td>
-                        <td>${Number(row.total_amount).toLocaleString()}</td>
 
                         <!-- New Bank Info Fields -->
                         <td>${row.bank_name ?? '-'}</td>
                         <td>${row.branch_name ?? '-'}</td>
                         <td>${row.account_number ?? '-'}</td>
                         <td>${row.sort_code ?? '-'}</td>
+                        <td>${row.total_beneficiaries}</td>
+                        <td>${Number(row.total_amount).toLocaleString()}</td>
 
                         <td>
                             <button onclick="openSchoolBeneficiaries('${refNo}', ${phase}, '${row.school_id ?? ''}')">
