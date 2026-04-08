@@ -736,6 +736,7 @@ function openDistrictSummary(refNo) {
                 <table>
                     <thead>
                         <tr>
+                            <th>#</th>
                             <th>District Name</th>
 
                             <th>Bank</th>
@@ -754,6 +755,7 @@ function openDistrictSummary(refNo) {
             json.data.forEach(row => {
                 html += `
                     <tr>
+                        <td>${i+1}</td>
                         <td>${row.district_name}</td>
 
                         <td>${row.district_bank}</td>
