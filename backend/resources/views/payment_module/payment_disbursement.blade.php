@@ -328,6 +328,31 @@
             font-weight: 600;
         }
 
+        /* ─────────────────────────────────────────────
+        STATUS BADGES
+        ───────────────────────────────────────────── */
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            display: inline-block;
+            text-transform: capitalize;
+        }
+
+        .status-pending {
+            background: #9e9e9e; /* grey */
+        }
+
+        .status-success {
+            background: #2e7d32; /* green */
+        }
+
+        .status-failed {
+            background: #d32f2f; /* red */
+        }
+
 
     </style>
 </head>
@@ -671,7 +696,9 @@ function openSchoolSummary(refNo) {
                         <td>${row.school_sort_code ?? '-'}</td>
                         <td>${row.total_beneficiaries}</td>
                         <td>${Number(row.total_amount).toLocaleString()}</td>
-                        <td>${row.disbursement_status}</td>
+                        <td>
+                            ${getStatusBadge(row.disbursement_status)}
+                        </td>
                     </tr>
                 `;
             });
@@ -735,7 +762,9 @@ function openDistrictSummary(refNo) {
 
                         <td>${row.total_beneficiaries}</td>
                         <td>${Number(row.total_amount).toLocaleString()}</td>
-                        <td>${row.disbursement_status}</td>
+                        <td>
+                            ${getStatusBadge(row.disbursement_status)}
+                        </td>
                     </tr>
                 `;
             });
@@ -1043,6 +1072,23 @@ function openSchoolBeneficiaries(refNo, phase, schoolId) {
 
 function closeConfirm() {
     document.getElementById("confirmModal").style.display = "none";
+}
+
+function getStatusBadge(status) {
+
+    if (!status) return '<span class="status-badge status-pending">Pending</span>';
+
+    const s = status.toLowerCase();
+
+    if (s === "success") {
+        return `<span class="status-badge status-success">Success</span>`;
+    }
+
+    if (s === "failed") {
+        return `<span class="status-badge status-failed">Failed</span>`;
+    }
+
+    return `<span class="status-badge status-pending">Pending</span>`;
 }
 
 
