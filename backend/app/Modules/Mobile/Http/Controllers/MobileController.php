@@ -678,8 +678,9 @@ class MobileController extends Controller
             ->get()
             ->keyBy('designation_id');
 
-        $headTeacher = optional($contacts->get(1))->full_names ?? 'N/A';
-        $guidanceTeacher = optional($contacts->get(2))->full_names ?? 'N/A';
+            
+        $headTeacher = trim(optional($contacts->get(1))->full_names ?? '') ?: 'N/A';
+        $guidanceTeacher = trim(optional($contacts->get(2))->full_names ?? '') ?: 'N/A';
 
         // Generate PDF Using TCPDF
         $fileName = $paymentBatchId . '.pdf';
