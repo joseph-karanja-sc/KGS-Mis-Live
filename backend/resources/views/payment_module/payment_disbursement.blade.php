@@ -669,6 +669,7 @@ function openSchoolSummary(refNo) {
                 <table>
                     <thead>
                         <tr>
+                            <th>#</th>
                             <th>School Name</th>
                             <th>EMIS Code</th>
                             <th>District</th>
@@ -687,6 +688,7 @@ function openSchoolSummary(refNo) {
             json.data.forEach(row => {
                 html += `
                     <tr>
+                        <td>${i+1}</td>
                         <td>${row.school_name}</td>
                         <td>${row.school_emis}</td>
                         <td>${row.district_name ?? '-'}</td>
