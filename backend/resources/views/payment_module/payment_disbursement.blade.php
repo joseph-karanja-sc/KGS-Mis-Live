@@ -685,7 +685,7 @@ function openSchoolSummary(refNo) {
                     <tbody>
             `;
 
-            json.data.forEach(row => {
+            json.data.forEach((row, i) => {
                 html += `
                     <tr>
                         <td>${i+1}</td>
@@ -754,7 +754,7 @@ function openDistrictSummary(refNo) {
                     <tbody>
             `;
 
-            json.data.forEach(row => {
+            json.data.forEach((row, i) => {
                 html += `
                     <tr>
                         <td>${i+1}</td>
