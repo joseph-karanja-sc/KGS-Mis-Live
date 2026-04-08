@@ -708,6 +708,11 @@ function openDistrictSummary(refNo) {
                     <thead>
                         <tr>
                             <th>District Name</th>
+
+                            <th>Bank</th>
+                            <th>Account</th>
+                            <th>Sort Code</th>
+
                             <th>Total Beneficiaries</th>
                             <th>Total Amount</th>
                         </tr>
@@ -719,6 +724,11 @@ function openDistrictSummary(refNo) {
                 html += `
                     <tr>
                         <td>${row.district_name}</td>
+
+                        <td>${row.district_bank}</td>
+                        <td>${row.district_bank_account}</td>
+                        <td>${row.district_sort_code}</td>
+
                         <td>${row.total_beneficiaries}</td>
                         <td>${Number(row.total_amount).toLocaleString()}</td>
                     </tr>
