@@ -240,6 +240,18 @@ class SchoolManagementController extends BaseController
                     ]);
             }
 
+            // Update pg_school_fee_schedule table
+            DB::table('pg_school_fee_schedule')
+            ->where('school_id', $request->school_id)
+            ->update([
+                'bank_name'   => strtoupper($bankName ?? ''),
+                'branch_name' => strtoupper($branchName ?? ''),
+                'bank_account' => $request->account_no,
+                'sort_code'   => $request->sort_code ?? '',
+                'updated_at'  => now(),
+                'updated_by'  => auth()->id()
+            ]);
+
             DB::commit();
 
             return response()->json([
