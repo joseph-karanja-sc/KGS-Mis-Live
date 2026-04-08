@@ -653,6 +653,7 @@ function openSchoolSummary(refNo) {
                             <th>Sort Code</th>
                             <th>Total Beneficiaries</th>
                             <th>Total Amount</th>
+                            <th>Disbursement Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -670,6 +671,7 @@ function openSchoolSummary(refNo) {
                         <td>${row.school_sort_code ?? '-'}</td>
                         <td>${row.total_beneficiaries}</td>
                         <td>${Number(row.total_amount).toLocaleString()}</td>
+                        <td>${row.disbursement_status}</td>
                     </tr>
                 `;
             });
@@ -715,6 +717,8 @@ function openDistrictSummary(refNo) {
 
                             <th>Total Beneficiaries</th>
                             <th>Total Amount</th>
+
+                            <th>Disbursement Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -731,6 +735,7 @@ function openDistrictSummary(refNo) {
 
                         <td>${row.total_beneficiaries}</td>
                         <td>${Number(row.total_amount).toLocaleString()}</td>
+                        <td>${row.disbursement_status}</td>
                     </tr>
                 `;
             });

@@ -678,7 +678,7 @@ class MobileController extends Controller
             ->get()
             ->keyBy('designation_id');
 
-            
+
         $headTeacher = trim(optional($contacts->get(1))->full_names ?? '') ?: 'N/A';
         $guidanceTeacher = trim(optional($contacts->get(2))->full_names ?? '') ?: 'N/A';
 
@@ -6094,6 +6094,7 @@ class MobileController extends Controller
                 't1.bank_name as district_bank',
                 't1.bank_account as district_bank_account',
                 't1.sort_code as district_sort_code',
+                't1.grant_status as disbursement_status',
                 DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
                 DB::raw('SUM(t1.grant_amount) as total_amount')
             )
@@ -6120,6 +6121,7 @@ class MobileController extends Controller
                 't1.bank_account as school_bank_account',
                 't1.sort_code as school_sort_code',
                 't3.name as district_name',
+                't1.fee_status as disbursement_status',
                 DB::raw('SUM(t1.no_of_girls) as total_beneficiaries'),
                 DB::raw('SUM(t1.fee_amount) as total_amount')
             )
