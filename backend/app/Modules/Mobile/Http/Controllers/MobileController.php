@@ -4982,18 +4982,28 @@ class MobileController extends Controller
         $schoolCode = $school->code ?? 'UNKNOWN';
         $schoolName = $school->name ?? 'UNKNOWN';
 
+        // fetch district info (ADD THIS)
+        $district = DB::table('districts')
+            ->where('id', $row->district_id)
+            ->select('code', 'name')
+            ->first();
+
+        // safe handling
+        $districtCode = $district->code ?? 'UNKNOWN';
+        $districtName = $district->name ?? 'UNKNOWN';
+
         // dynamic term + year
         $term = $row->term ?? 1;
         $year = $row->year ?? date('Y');
 
         // build payment cycle string
-        $paymentCycle = "KGS Term {$term} - {$year}, {$schoolCode} - {$schoolName}";
+        $paymentCycle = "KGS Term {$term} {$year}, {$schoolCode} - {$schoolName}, {$districtCode} - {$districtName}";
 
         // format amount
         $amount = number_format($row->grant_amount ?? 0, 2);
 
         //user-facing message (SMS / notification)
-        $paymentReference = "KGS Grant ZMW {$amount} sent to {$schoolCode} - {$schoolName} for ({$paymentCycle})";
+        "PaymentReference" => "KGS Fees ZMW {$amount} sent to {$schoolCode} - {$schoolName} ({$districtName}) for ({$paymentCycle})",
 
         return [
 
@@ -5019,7 +5029,7 @@ class MobileController extends Controller
 
             "Ward"             => "0",
 
-            "DistrictID"       => $row->district_id ?? 0,
+            "DistrictID"       => $row->districtName ?? 0,
             "WardID"           => 0,
 
             "NRC"              => "999999/99/1",
