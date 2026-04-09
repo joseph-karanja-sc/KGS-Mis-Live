@@ -2487,7 +2487,10 @@ class UserManagementController extends BaseController
 
             // Change name to school_name for frontend display
             $qry->select('school_information.id', DB::raw('school_information.name as school_name'), DB::raw('school_information.code as emis_code'));
-            $qry->where('school_information.isDeleted', 0); // Only active schools
+            $qry->whereNotIn('school_information.id', function($subquery) {
+                    $subquery->select('school_id')
+                            ->from('deleted_schools');
+                }); // Only active schools
             
             $data = $qry->orderBy('school_name', 'asc')->get();
             $data = convertStdClassObjToArray($data);
