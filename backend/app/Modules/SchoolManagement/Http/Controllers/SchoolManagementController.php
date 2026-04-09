@@ -73,7 +73,10 @@ class SchoolManagementController extends BaseController
         }
 
         // isDeleted = 0
-        $query->where('s.isDeleted', 0);
+        $query->whereNotIn('s.id', function($subquery) {
+                    $subquery->select('school_id')
+                            ->from('deleted_schools');
+                }); // Only active schools
 
         // Get total count BEFORE pagination
         $total = $query->count();
