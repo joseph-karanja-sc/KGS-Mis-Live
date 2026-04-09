@@ -5003,7 +5003,7 @@ class MobileController extends Controller
         $amount = number_format($row->grant_amount ?? 0, 2);
 
         //user-facing message (SMS / notification)
-        "PaymentReference" => "KGS Fees ZMW {$amount} sent to {$schoolCode} - {$schoolName} ({$districtName}) for ({$paymentCycle})",
+        $paymentReference = "KGS Fees ZMW {$amount} sent to {$schoolCode} - {$schoolName} ({$districtName}) for ({$paymentCycle})";
 
         return [
 
@@ -5048,7 +5048,7 @@ class MobileController extends Controller
             "GPSLatitude"      => 0,
             "GPSLongitude"     => 0,
 
-            "PaymentReference" => $row->payment_ref_no,
+            "PaymentReference" => $paymentReference,
 
             // final safe field
             "PaymentCycle"     => $paymentCycle
