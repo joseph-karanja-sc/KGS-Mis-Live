@@ -4581,7 +4581,7 @@ class MobileController extends Controller
     }
 
     // working function prod
-    public function processAllSchoolsForPG4(Request $request)
+    public function processAllSchoolsForPG(Request $request)
     {
         $payment_ref_no = $request->payment_ref_no;
         $payment_type   = $request->payment_type; // 'school' or 'district'
@@ -4757,7 +4757,7 @@ class MobileController extends Controller
     }
 
     //test function
-    public function processAllSchoolsForPG(Request $request)
+    public function processAllSchoolsForPG4(Request $request)
     {
         $payment_ref_no = $request->payment_ref_no;
         $payment_type   = $request->payment_type; // 'school' or 'district'
@@ -5041,7 +5041,7 @@ class MobileController extends Controller
             "Currency"         => "ZMW",
             "TransactionType"  => "School Fees",
 
-            "Amount"           => floatval($row->fee_amount_test),
+            "Amount"           => floatval($row->fee_amount),
 
             "GPSAccuracy"      => 0,
             "GPSAltitude"      => 0,
