@@ -4793,7 +4793,7 @@ class MobileController extends Controller
         // This block ensures ONLY 10 transactions are processed
         // REMOVE this variable and the check below after testing
         // ==============================
-        $testLimit = 10;
+        $testLimit = 3;
         // ==============================
 
         while ($loop < $maxLoops) {
