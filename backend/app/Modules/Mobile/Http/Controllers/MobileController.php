@@ -5025,11 +5025,11 @@ class MobileController extends Controller
             "PSP"              => "ZANACO",
 
             "Province"         => "0",
-            "District"         => $row->district_id ?? "0",
+            "District"         => $districtName,
 
             "Ward"             => "0",
 
-            "DistrictID"       => $row->districtName ?? 0,
+            "DistrictID"       => $row->district_id ?? 0,
             "WardID"           => 0,
 
             "NRC"              => "999999/99/1",
