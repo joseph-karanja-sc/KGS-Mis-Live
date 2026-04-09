@@ -73,7 +73,7 @@ class SchoolManagementController extends BaseController
         }
 
         // isDeleted = 0
-        $query->whereNotIn('school_information.id', function($subquery) {
+        $query->whereNotIn('s.id', function($subquery) {
                     $subquery->select('school_id')
                             ->from('deleted_schools');
                 }); // Only active schools
