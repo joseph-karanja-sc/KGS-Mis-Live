@@ -64,9 +64,11 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     Route::get('/pg/transactions/{transaction_id}', 'MobileController@pgLogsDetails');
     Route::get('/pg/failed-payments', 'MobileController@getFailedPayments');
 
+    // endpoints to retry single payments school/grant
     Route::post('/pg/retry-one-payment-school', 'MobileController@retrySingleSchoolPayment');
     Route::post('/pg/retry-one-payment-district', 'MobileController@retrySingleDistrictPayment');
 
+    // endpoint to disburse payments to pg in batch
     Route::post('/processAllSchoolsForPG', 'MobileController@processAllSchoolsForPG');
 
     Route::get('/sa-trans-summary', 'MobileController@getSchoolTransactionSummary');
