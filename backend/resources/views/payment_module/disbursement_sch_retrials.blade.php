@@ -84,7 +84,7 @@
             <i class="fas fa-redo"></i> Retry All
         </button>
 
-        <button class="refresh-btn" onclick="loadData()">
+        <button class="refresh-btn" onclick="loadData(1)">
             <i class="fas fa-sync"></i> Refresh
         </button>
     </div>
@@ -108,6 +108,7 @@
 
 let currentAction = null;
 let currentPayload = null;
+let currentPage = 1; // ✅ pagination state
 
 function showToast(msg, type='success') {
     const t = document.createElement('div');
@@ -128,7 +129,6 @@ function closeModal(){
     document.getElementById('confirmModal').style.display='none';
 }
 
-
 function confirmAction(){
     closeModal();
     if(retryData){
@@ -138,24 +138,25 @@ function confirmAction(){
     }
 }
 
+function loadData(page = 1) {
 
-function loadData() {
+    currentPage = page; // ✅ update page
+
     document.getElementById('tableContainer').innerHTML = 'Loading...';
 
-    fetch("/api/zispis/v1/pg/failed-payments-fee")
+    fetch(`/api/zispis/v1/pg/failed-payments-fee?page=${currentPage}`)
     .then(res => res.json())
     .then(res => {
 
-        // ✅ safety check
         if (!res || !res.data) {
             document.getElementById('tableContainer').innerHTML = 'Error loading data';
             return;
         }
 
-        // ✅ set total count
         document.getElementById('totalFailed').innerText = res.data.total || 0;
 
         let rows = res.data.data || [];
+        let pagination = res.data;
 
         if (!rows.length) {
             document.getElementById('tableContainer').innerHTML = 'No failed transactions';
@@ -204,7 +205,24 @@ function loadData() {
             </tr>`;
         });
 
-        html += '</tbody></table>';
+        html += `
+        </tbody></table>
+
+        <!-- PAGINATION -->
+        <div style="margin-top:15px; display:flex; justify-content:center; gap:10px;">
+            <button onclick="prevPage()" ${pagination.current_page === 1 ? 'disabled' : ''}>
+                ⬅ Prev
+            </button>
+
+            <span style="padding:6px 12px;">
+                Page ${pagination.current_page} of ${pagination.last_page}
+            </span>
+
+            <button onclick="nextPage()" ${pagination.current_page === pagination.last_page ? 'disabled' : ''}>
+                Next ➡
+            </button>
+        </div>
+        `;
 
         document.getElementById('tableContainer').innerHTML = html;
 
@@ -213,6 +231,17 @@ function loadData() {
         console.error(err);
         document.getElementById('tableContainer').innerHTML = 'Failed to load data';
     });
+}
+
+/* PAGINATION FUNCTIONS */
+function nextPage(){
+    currentPage++;
+    loadData(currentPage);
+}
+
+function prevPage(){
+    currentPage--;
+    loadData(currentPage);
 }
 
 /* ========================
@@ -241,21 +270,10 @@ function retrySingle(transaction_id, btn){
         const pg = res.pg_response;
 
         if(res.status === true && pg?.ResultCode == 100){
-
-            showToast(
-                pg?.ResultDetails || "Payment successful",
-                "success"
-            );
-
-            setTimeout(loadData, 1500);
-
+            showToast(pg?.ResultDetails || "Payment successful","success");
+            setTimeout(()=>loadData(currentPage),1500);
         } else {
-
-            showToast(
-                pg?.ResultDetails || res.error || "Retry failed",
-                "error"
-            );
-
+            showToast(pg?.ResultDetails || res.error || "Retry failed","error");
             btn.disabled = false;
             btn.innerText = "Retry";
         }
@@ -264,7 +282,7 @@ function retrySingle(transaction_id, btn){
     .catch(() => {
         btn.disabled = false;
         btn.innerText = "Retry";
-        showToast("Request failed", "error");
+        showToast("Request failed","error");
     });
 }
 
@@ -292,12 +310,12 @@ function retryAll(){
         showToast(
             `Processed: ${res.processed}, Success: ${res.success}, Failed: ${res.failed}`
         );
-        loadData();
+        loadData(currentPage);
     });
 }
 
 /* INIT */
-loadData();
+loadData(1);
 
 </script>
 
