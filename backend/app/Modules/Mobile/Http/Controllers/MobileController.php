@@ -5881,7 +5881,7 @@ class MobileController extends Controller
 
             $data = DB::table('pg_school_fee_schedule as t1')
 
-                // join payment logs
+                // join logs (ONLY for extra info)
                 ->leftJoin('pg_payment_logs as t2', function ($join) {
                     $join->on(
                         DB::raw('t1.transaction_id COLLATE utf8mb4_unicode_ci'),
@@ -5890,17 +5890,12 @@ class MobileController extends Controller
                     );
                 })
 
-                // join districts
+                // joins
                 ->leftJoin('districts as t3', 't1.district_id', '=', 't3.id')
-
-                // join school_information
                 ->leftJoin('school_information as t4', 't1.school_id', '=', 't4.id')
 
-                // filter failed records
-                ->where(function ($q) {
-                    $q->where('t1.is_sent_to_pg', 2)
-                    ->orWhere('t2.status', 'failed');
-                })
+                // ✅ STRICT filter (ONLY schedule table)
+                ->where('t1.is_sent_to_pg', 2)
 
                 // optional filters
                 ->when($year, function ($q) use ($year) {
@@ -5912,10 +5907,9 @@ class MobileController extends Controller
 
                 ->select([
 
-                    // transaction
                     't1.transaction_id',
 
-                    // school name (code + name)
+                    // school name
                     DB::raw("
                         CONCAT(
                             IFNULL(t4.code, ''),
@@ -5967,6 +5961,7 @@ class MobileController extends Controller
             ]);
 
         } catch (\Exception $e) {
+
             \Log::error('Failed payments fetch error: ' . $e->getMessage());
 
             return response()->json([
