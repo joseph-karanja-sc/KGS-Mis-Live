@@ -1531,106 +1531,6 @@ function initiateDisbursement() {
     }, 3000);
 }
 
-async function initiateDisbursementOld() {
-
-    const refNo = document.getElementById("disburseRefNo").value;
-
-    // Disable button + show loading spinner
-    const btn = event.target;
-    btn.classList.add("btn-loading");
-    btn.innerText = "Processing...";
-
-    // Optional overlay (if you want opacity effect)
-    // showProcessingOverlay(true);
-
-    try {
-
-        const response = await fetch("https://kgsmis.edu.gov.zm/api/zispis/v1/processAllSchoolsForPG", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-            payment_ref_no: refNo,
-            payment_phase: document.getElementById("pgPhase").value
-        })
-
-        });
-
-        const json = await response.json();
-
-        // Remove loading state
-        btn.classList.remove("btn-loading");
-        btn.innerText = "Disburse Funds";
-        closeDisburseModal();
-
-        if (json.status === true) {
-            showToast("success", json.message ?? "Disbursement completed.");
-        } else {
-            showToast("error", json.message ?? "Disbursement failed.");
-        }
-
-    } catch (error) {
-        btn.classList.remove("btn-loading");
-        btn.innerText = "Disburse Funds";
-        closeDisburseModal();
-
-        showToast("error", "Network or server error.");
-        console.error("Disbursement error:", error);
-    }
-}
-
-async function triggerPGSubmissionOld() {
-
-    const refNo = document.getElementById("disburseRefNo").value;
-
-    // 🔥 determine type (IMPORTANT)
-    const category = window.currentPaymentCategory || ''; 
-
-    const paymentType =
-        category.toLowerCase().includes('school') ? 'school' : 'district';
-
-    const btn = event.target;
-    btn.classList.add("btn-loading");
-    btn.innerText = "Processing...";
-
-    try {
-
-        const response = await fetch(
-            "https://kgsmis.edu.gov.zm/api/zispis/v1/processAllSchoolsForPG",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    payment_ref_no: refNo,
-                    payment_type: paymentType   // ✅ NEW
-                })
-            }
-        );
-
-        const json = await response.json();
-
-        btn.classList.remove("btn-loading");
-        btn.innerText = "Disburse Funds";
-        closeDisburseModal();
-
-        if (json.status === true) {
-            showToast("success", json.message ?? "Disbursement completed.");
-        } else {
-            showToast("error", json.message ?? "Disbursement failed.");
-        }
-
-    } catch (error) {
-        btn.classList.remove("btn-loading");
-        btn.innerText = "Disburse Funds";
-        closeDisburseModal();
-
-        showToast("error", "Network or server error.");
-        console.error("Disbursement error:", error);
-    }
-}
 
 async function triggerPGSubmission(refNo, category, btn = null) {
 
@@ -1656,8 +1556,9 @@ async function triggerPGSubmission(refNo, category, btn = null) {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    payment_ref_no: refNo,   // ✅ from param
-                    payment_type: paymentType
+                    payment_ref_no: refNo,
+                    payment_type: paymentType,
+                    mode: "fresh"
                 })
             }
         );

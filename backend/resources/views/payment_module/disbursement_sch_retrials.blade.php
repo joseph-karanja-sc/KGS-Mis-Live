@@ -302,7 +302,8 @@ function retryAll(){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
             payment_ref_no:"KGS/PAY/REQ/2026/0001",
-            payment_type:"school"
+            payment_type:"school",
+            mode: "retry"
         })
     })
     .then(res=>res.json())
