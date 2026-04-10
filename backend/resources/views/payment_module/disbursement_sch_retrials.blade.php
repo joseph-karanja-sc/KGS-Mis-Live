@@ -67,6 +67,18 @@
 <div class="container">
 <div class="card">
 
+    <div id="summaryCard" style="
+        background:#ffe5e5;
+        color:#c62828;
+        padding:12px 16px;
+        border-radius:8px;
+        margin-bottom:15px;
+        font-weight:600;
+        font-size:14px;
+    ">
+        Total Failed Transactions: <span id="totalFailed">0</span>
+    </div>
+
     <div class="top-actions">
         <button class="retry-all-btn" onclick="confirmRetryAll()">
             <i class="fas fa-redo"></i> Retry All
@@ -127,6 +139,11 @@ function loadData(){
     fetch("/api/zispis/v1/pg/failed-payments-fee")
     .then(res=>res.json())
     .then(res=>{
+
+        // ✅ set total count (from pagination)
+        document.getElementById('totalFailed').innerText = res.data.total;
+
+        let rows = res.data.data;
 
         let rows = res.data.data;
 
