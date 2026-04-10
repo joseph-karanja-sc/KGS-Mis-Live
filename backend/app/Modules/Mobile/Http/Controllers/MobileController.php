@@ -5000,10 +5000,17 @@ class MobileController extends Controller
         $paymentCycle = "KGS Term {$term} {$year}, {$schoolCode} - {$schoolName}, {$districtCode} - {$districtName}";
 
         // format amount
-        $amount = number_format($row->grant_amount ?? 0, 2);
+        $amount = number_format($row->fee_amount ?? 0, 2);
 
-        //user-facing message (SMS / notification)
-        $paymentReference = "KGS Fees ZMW {$amount} sent to {$schoolCode} - {$schoolName} ({$districtName}) for ({$paymentCycle})";
+        // 🔥 compact version first
+        $paymentReference = "KGS {$year}T{$term} ZMW {$amount} {$schoolCode} {$schoolName} {$districtName}";
+
+        // 🔥 enforce max length (104 chars)
+        $maxLength = 104;
+
+        if (strlen($paymentReference) > $maxLength) {
+            $paymentReference = substr($paymentReference, 0, $maxLength);
+        }
 
         return [
 
@@ -5054,6 +5061,7 @@ class MobileController extends Controller
             "PaymentCycle"     => $paymentCycle
         ];
     }
+
     private function buildDistrictPayload($row)
     {
         // generate transaction id if missing (safety, though retry already handles this)
@@ -5140,6 +5148,7 @@ class MobileController extends Controller
             "PaymentCycle"     => "KGS {$paymentCycle}, {$districtCode} - {$districtName}"
         ];
     }
+    
     public function getNextSchoolForPayment()
     {
         $school = DB::table('grant_pilotschedule_one')
