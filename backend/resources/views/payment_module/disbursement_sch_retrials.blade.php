@@ -128,9 +128,14 @@ function closeModal(){
     document.getElementById('confirmModal').style.display='none';
 }
 
+
 function confirmAction(){
     closeModal();
-    currentAction(currentPayload);
+    if(retryData){
+        retrySingle(retryData.transaction_id, retryData.btn);
+    } else if(currentAction){
+        currentAction(currentPayload);
+    }
 }
 
 
@@ -191,7 +196,8 @@ function loadData() {
                 <td>${r.fee_amount || ''}</td>
                 <td>
                     <button class="retry-btn"
-                        onclick="confirmRetrySingle('${r.transaction_id}')">
+                        ${r.status === 'success' ? 'disabled' : ''}
+                        onclick="confirmRetrySingle('${r.transaction_id}', this)">
                         Retry
                     </button>
                 </td>
@@ -212,31 +218,53 @@ function loadData() {
 /* ========================
    RETRY SINGLE
 ======================== */
-function confirmRetrySingle(transaction_id){
-    openModal("Retry this transaction?", retrySingle, transaction_id);
+let retryData = null;
+
+function confirmRetrySingle(transaction_id, btn){
+    retryData = { transaction_id, btn };
+    openModal("Retry this transaction?");
 }
 
-function retrySingle(transaction_id){
+function retrySingle(transaction_id, btn){
 
-    showToast("Retrying...", "success");
+    btn.disabled = true;
+    btn.innerText = "Retrying...";
 
     fetch('/api/zispis/v1/pg/retry-one-payment-school', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-            school_id:1, // ⚠️ adjust if needed
-            payment_ref_no:"KGS/PAY/REQ/2026/0001",
-            payment_phase:1
-        })
+        body: JSON.stringify({ transaction_id })
     })
-    .then(res=>res.json())
-    .then(res=>{
-        if(res.status){
-            showToast("Success: "+res.result_code);
-        }else{
-            showToast("Failed: "+(res.error || res.result_code),'error');
+    .then(res => res.json())
+    .then(res => {
+
+        const pg = res.pg_response;
+
+        if(res.status === true && pg?.ResultCode == 100){
+
+            showToast(
+                pg?.ResultDetails || "Payment successful",
+                "success"
+            );
+
+            setTimeout(loadData, 1500);
+
+        } else {
+
+            showToast(
+                pg?.ResultDetails || res.error || "Retry failed",
+                "error"
+            );
+
+            btn.disabled = false;
+            btn.innerText = "Retry";
         }
-        loadData();
+
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerText = "Retry";
+        showToast("Request failed", "error");
     });
 }
 

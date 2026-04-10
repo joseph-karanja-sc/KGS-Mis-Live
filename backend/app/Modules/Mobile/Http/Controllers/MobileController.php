@@ -5238,125 +5238,154 @@ class MobileController extends Controller
     //retry single school payment
     public function retrySingleSchoolPayment(Request $request)
     {
-        $school_id      = $request->school_id;
-        $payment_ref_no = $request->payment_ref_no;
-        $payment_phase  = $request->payment_phase;
-
-        if (!$school_id || !$payment_ref_no || !$payment_phase) {
-            return response()->json([
-                "status"  => false,
-                "message" => "school_id, payment_ref_no and payment_phase are required."
-            ], 400);
-        }
-
-        // Fetch the school record
-        $school = DB::table('grant_pilotschedule_one')
-            ->where('school_id', $school_id)
-            ->where('payment_ref_no', $payment_ref_no)
-            ->where('payment_phase', $payment_phase)
-            ->first();
-
-        if (!$school) {
-            return response()->json([
-                "status"  => false,
-                "message" => "School record not found."
-            ], 404);
-        }
-
-        // Build PG payload (creates TID if missing)
-        $payloadItem = $this->buildSingleSchoolPayload($school);
-        // dd($payloadItem);
-        $tid         = $payloadItem["TransactionID"];
-
-        $url     = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
-        $headers = $this->preparePGHeaders();
-
-        // Log before sending
-        $logId = DB::table('pg_payment_logs')->insertGetId([
-            "payment_ref_no"   => $payment_ref_no,
-            "payment_phase"    => $payment_phase,
-            "school_id"        => $school->school_id,
-            "transaction_id"   => $tid,
-            "request_url"      => $url,
-            "request_payload"  => json_encode($payloadItem),
-            "headers"          => json_encode($headers),
-            "status"           => "pending",
-            "created_at"       => now(),
-            "updated_at"       => now()
-        ]);
-
         try {
-            $client = new \GuzzleHttp\Client(['verify' => false]);
 
-            $response = $client->post($url, [
-                'headers'     => $headers,
-                'json'        => $payloadItem,
-                'http_errors' => false
+            $transaction_id = $request->transaction_id;
+
+            if (!$transaction_id) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "transaction_id is required"
+                ], 400);
+            }
+
+            // get record from school schedule table
+            $record = DB::table('pg_school_fee_schedule')
+                ->where('transaction_id', $transaction_id)
+                ->first();
+
+            if (!$record) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "Record not found"
+                ], 404);
+            }
+
+            // prevent retry if already successful
+            if ((int)$record->is_sent_to_pg === 1) {
+                return response()->json([
+                    "status" => false,
+                    "message" => "Payment already successful, cannot retry"
+                ], 400);
+            }
+
+            // ALWAYS generate NEW transaction id
+            $newTransactionId = "KGSTR-" . substr(str_replace('-', '', \Illuminate\Support\Str::uuid()->toString()), 0, 30);
+
+            DB::table('pg_school_fee_schedule')
+                ->where('id', $record->id)
+                ->update([
+                    'transaction_id' => $newTransactionId
+                ]);
+
+            // update local object
+            $record->transaction_id = $newTransactionId;
+
+            // build payload using your existing function
+            $payloadItem = $this->buildSchoolPayload($record);
+
+            $tid = $payloadItem["TransactionID"];
+            $url = "https://pg.zispis.gov.zm/sps/api/zispis/prod/kgs/payment/{$tid}";
+            $headers = $this->preparePGHeaders();
+
+            // insert log
+            $logId = DB::table('pg_payment_logs')->insertGetId([
+                "payment_ref_no"   => $record->payment_ref_no,
+                "transaction_id"   => $tid,
+                "payment_phase"    => 0,
+                "request_url"      => $url,
+                "request_payload"  => json_encode($payloadItem),
+                "headers"          => json_encode($headers),
+                "status"           => "pending",
+                "created_at"       => now(),
+                "updated_at"       => now()
             ]);
 
-            $body = $response->getBody()->getContents();
-            $json = json_decode($body, true);
+            try {
 
-            // Extract PG result code
-            $resultCode = $json['ResultCode'] ?? null;
-
-            // Determine if successful
-            $isSuccess = ($resultCode == 100);
-
-            // Update payment log
-            DB::table('pg_payment_logs')
-                ->where('id', $logId)
-                ->update([
-                    "http_status"   => $resultCode,     // store PG ResultCode
-                    "response_body" => $body,
-                    "status"        => $isSuccess ? "success" : "failed",
-                    "updated_at"    => now()
+                $client = new \GuzzleHttp\Client([
+                    'verify' => false,
+                    'timeout' => 60
                 ]);
 
-            // Mark school as processed
-            DB::table('grant_pilotschedule_one')
-                ->where('id', $school->id)
-                ->update([
-                    'is_sent_to_pg' => $isSuccess ? 1 : 2
+                $response = $client->post($url, [
+                    'headers'     => $headers,
+                    'json'        => $payloadItem,
+                    'http_errors' => false
                 ]);
+
+                $httpStatus = $response->getStatusCode();
+                $body       = $response->getBody()->getContents();
+
+                $responseJson = json_decode($body, true);
+                $resultCode   = $responseJson['ResultCode'] ?? null;
+
+                // ONLY success if ResultCode == 100
+                $isSuccess = ($resultCode == 100);
+
+                // update log
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "http_status"   => $httpStatus,
+                        "result_code"   => $resultCode,
+                        "response_body" => $body,
+                        "status"        => $isSuccess ? "success" : "failed",
+                        "updated_at"    => now()
+                    ]);
+
+                // update schedule status
+                DB::table('pg_school_fee_schedule')
+                    ->where('id', $record->id)
+                    ->update([
+                        'is_sent_to_pg' => $isSuccess ? 1 : 2
+                    ]);
+
+                return response()->json([
+                    "status" => true,
+                    "message" => $isSuccess ? "Payment successful" : "Payment failed",
+                    "pg_response" => $responseJson
+                ]);
+
+            } catch (\Exception $e) {
+
+                DB::table('pg_payment_logs')
+                    ->where('id', $logId)
+                    ->update([
+                        "status"        => "error",
+                        "response_body" => $e->getMessage(),
+                        "updated_at"    => now()
+                    ]);
+
+                DB::table('pg_school_fee_schedule')
+                    ->where('id', $record->id)
+                    ->update([
+                        'is_sent_to_pg' => 2
+                    ]);
+
+                return response()->json([
+                    "status" => false,
+                    "message" => "Retry failed",
+                    "error" => $e->getMessage()
+                ], 500);
+            }
+
+        } catch (\Throwable $e) {
+
+            \Log::error("Retry single school payment error", [
+                "error" => $e->getMessage()
+            ]);
 
             return response()->json([
-                "status"         => $isSuccess,
-                "result_code"    => $resultCode,
-                "transaction_id" => $tid,
-                "pg_response"    => $json
-            ]);
-
-        } catch (\Exception $e) {
-
-            // Log exception
-            DB::table('pg_payment_logs')
-                ->where('id', $logId)
-                ->update([
-                    "status"        => "failed",
-                    "response_body" => $e->getMessage(),
-                    "updated_at"    => now()
-                ]);
-
-            // Mark school as failed
-            DB::table('grant_pilotschedule_one')
-                ->where('id', $school->id)
-                ->update(['is_sent_to_pg' => 2]);
-
-            return response()->json([
-                "status"       => false,
-                "error"        => $e->getMessage(),
-                "transaction_id" => $tid
-            ]);
+                "status" => false,
+                "message" => "Unexpected error",
+                "error" => $e->getMessage()
+            ], 500);
         }
     }
 
     public function retrySingleDistrictPayment(Request $request)
     {
-        return response()->json([
-            'success' => false,
-            'message' => 'You are not authorized to perform this action'
-        ], 403);
         try {
 
             $transaction_id = $request->transaction_id;
