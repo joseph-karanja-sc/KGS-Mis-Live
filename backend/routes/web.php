@@ -37,6 +37,9 @@ Route::get('/pg_transactions_report', function () {
 Route::get('/pg_retrials', function () {
     return view('payment_module.disbursement_retrials');
 })->name('payment_module.disbursement_retrials');
+Route::get('/pg_sch_retrials', function () {
+    return view('payment_module.disbursement_sch_retrials');
+})->name('payment_module.disbursement_sch_retrials');
 
 //sa app trans statuses
 Route::get('/sa_trans_statuses', function () {

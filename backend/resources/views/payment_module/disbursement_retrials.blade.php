@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Disbursement Re-trials</title>
+<title>Education Grants Disbursement Re-trials</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
@@ -169,7 +169,7 @@ tr:nth-child(even) {
 
 <body>
 
-<div class="header">Disbursement Re-trials</div>
+<div class="header">Education Grants Disbursement Re-trials</div>
 
 <div class="container">
 <div class="card">
