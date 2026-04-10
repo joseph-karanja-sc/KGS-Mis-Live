@@ -5851,6 +5851,8 @@ class MobileController extends Controller
             $term = $req->input('term');
 
             $data = DB::table('pg_school_fee_schedule as t1')
+
+                // join payment logs
                 ->leftJoin('pg_payment_logs as t2', function ($join) {
                     $join->on(
                         DB::raw('t1.transaction_id COLLATE utf8mb4_unicode_ci'),
@@ -5858,7 +5860,12 @@ class MobileController extends Controller
                         DB::raw('t2.transaction_id COLLATE utf8mb4_unicode_ci')
                     );
                 })
+
+                // join districts
                 ->leftJoin('districts as t3', 't1.district_id', '=', 't3.id')
+
+                // join school_information
+                ->leftJoin('school_information as t4', 't1.school_id', '=', 't4.id')
 
                 // filter failed records
                 ->where(function ($q) {
@@ -5866,7 +5873,7 @@ class MobileController extends Controller
                     ->orWhere('t2.status', 'failed');
                 })
 
-                // optional filters (important for your system)
+                // optional filters
                 ->when($year, function ($q) use ($year) {
                     $q->where('t1.year', $year);
                 })
@@ -5875,10 +5882,20 @@ class MobileController extends Controller
                 })
 
                 ->select([
+
                     // transaction
                     't1.transaction_id',
 
-                    // result_code (prefer stored column, fallback to JSON)
+                    // school name (code + name)
+                    DB::raw("
+                        CONCAT(
+                            IFNULL(t4.code, ''),
+                            ' - ',
+                            IFNULL(t4.name, '')
+                        ) AS school_name
+                    "),
+
+                    // result_code
                     DB::raw("
                         CASE 
                             WHEN t2.result_code IS NOT NULL AND t2.result_code != 0 
@@ -5906,11 +5923,13 @@ class MobileController extends Controller
                     't1.bank_account as district_bank_account',
                     't1.branch_name as district_branch',
                     't1.sort_code as district_sort_code',
+
+                    // amount
                     't1.fee_amount',
                 ])
 
                 ->orderByDesc('t1.id')
-                ->paginate(100); // better than LIMIT
+                ->paginate(100);
 
             return response()->json([
                 'status' => 'success',
