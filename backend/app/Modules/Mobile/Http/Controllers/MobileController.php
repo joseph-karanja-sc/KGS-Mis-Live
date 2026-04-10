@@ -5353,6 +5353,10 @@ class MobileController extends Controller
 
     public function retrySingleDistrictPayment(Request $request)
     {
+        return response()->json([
+            'success' => false,
+            'message' => 'You are not authorized to perform this action'
+        ], 403);
         try {
 
             $transaction_id = $request->transaction_id;
