@@ -6247,7 +6247,6 @@ class MobileController extends Controller
         ]);
     }
 
-
     public function getImagesv1(Request $request)
     {
         $uuidsRaw = $request->query('uuids');
