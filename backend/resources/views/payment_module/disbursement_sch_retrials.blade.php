@@ -140,6 +140,9 @@ function loadData(){
             <tr>
                 <th>#</th>
                 <th>School</th>
+                <th>School District</th>
+                <th>Bank</th>
+                <th>Bank Acc</th>
                 <th>Transaction ID</th>
                 <th>Result Code</th>
                 <th>Status</th>
@@ -154,6 +157,9 @@ function loadData(){
             <tr>
                 <td>${i+1}</td>
                 <td>${r.school_name || ''}</td>
+                <td>${r.district_name || ''}</td>
+                <td>${r.district_bank_name || ''}</td>
+                <td>${r.district_bank_account || ''}</td>
                 <td>${r.transaction_id}</td>
                 <td>${r.result_code || ''}</td>
                 <td class="${r.status==='success'?'status-success':'status-failed'}">${r.status}</td>
