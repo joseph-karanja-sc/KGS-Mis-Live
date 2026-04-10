@@ -208,7 +208,7 @@
     </div>
 
     <script>
-        // refresh button
+        // refresh button jose
         function refreshData() {
             // loadFailedPayments();
         }
