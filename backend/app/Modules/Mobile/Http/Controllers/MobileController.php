@@ -5881,8 +5881,20 @@ class MobileController extends Controller
 
             $data = DB::table('pg_school_fee_schedule as t1')
 
-                // join logs (ONLY for extra info)
-                ->leftJoin('pg_payment_logs as t2', function ($join) {
+                // 🔥 join ONLY latest log per transaction_id using created_at
+                ->leftJoin(DB::raw("
+                    (
+                        SELECT l1.*
+                        FROM pg_payment_logs l1
+                        INNER JOIN (
+                            SELECT transaction_id, MAX(created_at) as max_created_at
+                            FROM pg_payment_logs
+                            GROUP BY transaction_id
+                        ) l2 
+                        ON l1.transaction_id = l2.transaction_id
+                        AND l1.created_at = l2.max_created_at
+                    ) as t2
+                "), function ($join) {
                     $join->on(
                         DB::raw('t1.transaction_id COLLATE utf8mb4_unicode_ci'),
                         '=',
@@ -5894,7 +5906,7 @@ class MobileController extends Controller
                 ->leftJoin('districts as t3', 't1.district_id', '=', 't3.id')
                 ->leftJoin('school_information as t4', 't1.school_id', '=', 't4.id')
 
-                // ✅ STRICT filter (ONLY schedule table)
+                // ✅ STRICT filter
                 ->where('t1.is_sent_to_pg', 2)
 
                 // optional filters
