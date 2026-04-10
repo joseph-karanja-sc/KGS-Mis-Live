@@ -133,21 +133,26 @@ function confirmAction(){
     currentAction(currentPayload);
 }
 
-function loadData(){
+
+function loadData() {
     document.getElementById('tableContainer').innerHTML = 'Loading...';
 
     fetch("/api/zispis/v1/pg/failed-payments-fee")
-    .then(res=>res.json())
-    .then(res=>{
+    .then(res => res.json())
+    .then(res => {
 
-        // ✅ set total count (from pagination)
-        document.getElementById('totalFailed').innerText = res.data.total;
+        // ✅ safety check
+        if (!res || !res.data) {
+            document.getElementById('tableContainer').innerHTML = 'Error loading data';
+            return;
+        }
 
-        let rows = res.data.data;
+        // ✅ set total count
+        document.getElementById('totalFailed').innerText = res.data.total || 0;
 
-        let rows = res.data.data;
+        let rows = res.data.data || [];
 
-        if(!rows.length){
+        if (!rows.length) {
             document.getElementById('tableContainer').innerHTML = 'No failed transactions';
             return;
         }
@@ -169,19 +174,21 @@ function loadData(){
             </tr>
         </thead><tbody>`;
 
-        rows.forEach((r,i)=>{
+        rows.forEach((r, i) => {
             html += `
             <tr>
-                <td>${i+1}</td>
+                <td>${i + 1}</td>
                 <td>${r.school_name || ''}</td>
                 <td>${r.district_name || ''}</td>
                 <td>${r.district_bank_name || ''}</td>
                 <td>${r.district_bank_account || ''}</td>
-                <td>${r.transaction_id}</td>
+                <td>${r.transaction_id || ''}</td>
                 <td>${r.result_code || ''}</td>
-                <td class="${r.status==='success'?'status-success':'status-failed'}">${r.status}</td>
+                <td class="${r.status === 'success' ? 'status-success' : 'status-failed'}">
+                    ${r.status || ''}
+                </td>
                 <td>${r.result_details || ''}</td>
-                <td>${r.fee_amount}</td>
+                <td>${r.fee_amount || ''}</td>
                 <td>
                     <button class="retry-btn"
                         onclick="confirmRetrySingle('${r.transaction_id}')">
@@ -195,6 +202,10 @@ function loadData(){
 
         document.getElementById('tableContainer').innerHTML = html;
 
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById('tableContainer').innerHTML = 'Failed to load data';
     });
 }
 
