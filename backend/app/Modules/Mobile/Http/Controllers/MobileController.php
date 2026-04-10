@@ -4960,10 +4960,21 @@ class MobileController extends Controller
 
     private function buildSchoolPayload($row)
     {
-        // generate transaction id if missing
-        if (empty($row->transaction_id)) {
 
-            $tid = "KGSTRIDT-" . \Illuminate\Support\Str::uuid()->toString();
+        // ALWAYS regenerate TID for non-success records
+        if ((int)$row->is_sent_to_pg !== 1) {
+
+            // clear existing transaction_id if present
+            if (!empty($row->transaction_id)) {
+                DB::table('pg_school_fee_schedule')
+                    ->where('id', $row->id)
+                    ->update(['transaction_id' => null]);
+
+                $row->transaction_id = null;
+            }
+
+            // generate new transaction_id
+            $tid = "KGSTR-" . substr(str_replace('-', '', \Illuminate\Support\Str::uuid()->toString()), 0, 30);
 
             DB::table('pg_school_fee_schedule')
                 ->where('id', $row->id)
@@ -5148,7 +5159,7 @@ class MobileController extends Controller
             "PaymentCycle"     => "KGS {$paymentCycle}, {$districtCode} - {$districtName}"
         ];
     }
-    
+
     public function getNextSchoolForPayment()
     {
         $school = DB::table('grant_pilotschedule_one')
