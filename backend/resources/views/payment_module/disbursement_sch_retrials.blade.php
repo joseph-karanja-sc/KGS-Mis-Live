@@ -183,7 +183,7 @@ function loadData(page = 1) {
         rows.forEach((r, i) => {
             html += `
             <tr>
-                <td>${i + 1}</td>
+                <td>${(pagination.from || 0) + i}</td>
                 <td>${r.school_name || ''}</td>
                 <td>${r.district_name || ''}</td>
                 <td>${r.district_bank_name || ''}</td>
