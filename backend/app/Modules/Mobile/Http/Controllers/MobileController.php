@@ -5881,18 +5881,17 @@ class MobileController extends Controller
 
             $data = DB::table('pg_school_fee_schedule as t1')
 
-                // 🔥 join ONLY latest log per transaction_id using created_at
+                // 🔥 join ONLY latest log per transaction_id (SAFE: uses MAX(id))
                 ->leftJoin(DB::raw("
                     (
                         SELECT l1.*
                         FROM pg_payment_logs l1
                         INNER JOIN (
-                            SELECT transaction_id, MAX(created_at) as max_created_at
+                            SELECT transaction_id, MAX(id) as max_id
                             FROM pg_payment_logs
                             GROUP BY transaction_id
-                        ) l2 
-                        ON l1.transaction_id = l2.transaction_id
-                        AND l1.created_at = l2.max_created_at
+                        ) l2
+                        ON l1.id = l2.max_id
                     ) as t2
                 "), function ($join) {
                     $join->on(
@@ -5906,7 +5905,7 @@ class MobileController extends Controller
                 ->leftJoin('districts as t3', 't1.district_id', '=', 't3.id')
                 ->leftJoin('school_information as t4', 't1.school_id', '=', 't4.id')
 
-                // ✅ STRICT filter
+                // ✅ STRICT filter (ONLY primary table)
                 ->where('t1.is_sent_to_pg', 2)
 
                 // optional filters
@@ -5919,6 +5918,7 @@ class MobileController extends Controller
 
                 ->select([
 
+                    // transaction
                     't1.transaction_id',
 
                     // school name
@@ -5930,7 +5930,7 @@ class MobileController extends Controller
                         ) AS school_name
                     "),
 
-                    // result_code
+                    // result_code (prefer column, fallback JSON)
                     DB::raw("
                         CASE 
                             WHEN t2.result_code IS NOT NULL AND t2.result_code != 0 
