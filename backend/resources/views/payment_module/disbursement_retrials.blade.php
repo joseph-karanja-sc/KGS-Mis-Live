@@ -230,7 +230,7 @@ function loadFailedPayments() {
     const tbody = document.getElementById("failedBody");
     tbody.innerHTML = "";
 
-    fetch("/api/zispis/v1/pg/failed-payments")
+    fetch("/api/zispis/v1/pg/failed-payments-grant")
         .then(res => res.json())
         .then(data => {
 

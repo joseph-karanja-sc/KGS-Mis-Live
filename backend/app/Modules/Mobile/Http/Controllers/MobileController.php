@@ -5755,13 +5755,98 @@ class MobileController extends Controller
         ]);
     }
 
-    public function getFailedPayments(Request $req)
+    public function getFailedPaymentsGrant(Request $req)
     {
         try {
             $year = $req->input('year');
             $term = $req->input('term');
 
             $data = DB::table('pg_district_grant_schedule as t1')
+                ->leftJoin('pg_payment_logs as t2', function ($join) {
+                    $join->on(
+                        DB::raw('t1.transaction_id COLLATE utf8mb4_unicode_ci'),
+                        '=',
+                        DB::raw('t2.transaction_id COLLATE utf8mb4_unicode_ci')
+                    );
+                })
+                ->leftJoin('districts as t3', 't1.district_id', '=', 't3.id')
+
+                // filter failed records
+                ->where(function ($q) {
+                    $q->where('t1.is_sent_to_pg', 2)
+                    ->orWhere('t2.status', 'failed');
+                })
+
+                // optional filters (important for your system)
+                ->when($year, function ($q) use ($year) {
+                    $q->where('t1.year', $year);
+                })
+                ->when($term, function ($q) use ($term) {
+                    $q->where('t1.term', $term);
+                })
+
+                ->select([
+                    // transaction
+                    't1.transaction_id',
+
+                    // result_code (prefer stored column, fallback to JSON)
+                    DB::raw("
+                        CASE 
+                            WHEN t2.result_code IS NOT NULL AND t2.result_code != 0 
+                            THEN t2.result_code
+                            WHEN JSON_VALID(t2.response_body)
+                            THEN JSON_UNQUOTE(JSON_EXTRACT(t2.response_body, '$.ResultCode'))
+                            ELSE NULL
+                        END AS result_code
+                    "),
+
+                    't2.status',
+
+                    // result_details
+                    DB::raw("
+                        CASE 
+                            WHEN JSON_VALID(t2.response_body)
+                            THEN JSON_UNQUOTE(JSON_EXTRACT(t2.response_body, '$.ResultDetails'))
+                            ELSE NULL
+                        END AS result_details
+                    "),
+
+                    // district info
+                    't3.name as district_name',
+                    't1.bank_name as district_bank_name',
+                    't1.bank_account as district_bank_account',
+                    't1.branch_name as district_branch',
+                    't1.sort_code as district_sort_code',
+                    't1.grant_amount',
+                ])
+
+                ->orderByDesc('t1.id')
+                ->paginate(100); // better than LIMIT
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Failed payments retrieved successfully',
+                'data' => $data
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed payments fetch error: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to retrieve failed payments',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getFailedPaymentsFees(Request $req)
+    {
+        try {
+            $year = $req->input('year');
+            $term = $req->input('term');
+
+            $data = DB::table('pg_school_fee_schedule as t1')
                 ->leftJoin('pg_payment_logs as t2', function ($join) {
                     $join->on(
                         DB::raw('t1.transaction_id COLLATE utf8mb4_unicode_ci'),
