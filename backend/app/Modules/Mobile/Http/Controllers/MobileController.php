@@ -5906,7 +5906,7 @@ class MobileController extends Controller
                     't1.bank_account as district_bank_account',
                     't1.branch_name as district_branch',
                     't1.sort_code as district_sort_code',
-                    't1.grant_amount',
+                    't1.fee_amount',
                 ])
 
                 ->orderByDesc('t1.id')
