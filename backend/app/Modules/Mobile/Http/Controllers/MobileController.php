@@ -6497,92 +6497,41 @@ class MobileController extends Controller
         try {
 
             $perPage = 10;
-            $page = $request->query('page', 1);
 
             $query = DB::table('sa_app_beneficiary_transaction_status as t1')
-                ->leftJoin(
-                    'sa_app_beneficiary_list_5 as b5',
-                    'b5.beneficiary_no',
-                    '=',
-                    't1.beneficiary_no'
-                )
+                ->leftJoin('sa_app_beneficiary_list_5 as b5', 'b5.beneficiary_no', '=', 't1.beneficiary_no')
+                ->leftJoin('school_information as s', 's.id', '=', 'b5.school_id')
+                ->leftJoin('districts as d', 'd.id', '=', 's.district_id')
+
                 ->where('t1.date_received', '>', '2025-12-01')
+
                 ->select(
-                    't1.*',
-                    'b5.beneficiary_id',
+                    't1.id',
+                    't1.transaction_id',
+                    't1.payment_status',
+                    't1.images',
+                    't1.date_received',
+
                     'b5.beneficiary_no',
                     'b5.first_name',
                     'b5.last_name',
                     'b5.grant_amount',
-                    'b5.hhh_fname',
-                    'b5.hhh_lname',
-                    'b5.hhh_nrc_number',
-                    'b5.school_id'
+
+                    's.name as school_name',
+                    's.code as school_emis',
+                    'd.name as school_district'
                 )
+
                 ->orderBy('t1.id', 'desc');
 
-            $paginated = $query->paginate($perPage, ['*'], 'page', $page);
-
-            $rows = collect($paginated->items());
-
-            if ($rows->isEmpty()) {
-                return response()->json([
-                    "status" => false,
-                    "message" => "No records found"
-                ], 404);
-            }
-
-            // Group by school
-            $groupedBySchool = $rows->groupBy('school_id');
-
-            $schoolsArray = [];
-
-            foreach ($groupedBySchool as $schoolId => $beneficiaries) {
-
-                if (empty($schoolId)) continue;
-
-                $school = DB::table('school_information')->where('id', $schoolId)->first();
-                if (!$school) continue;
-
-                $district = DB::table('districts')->where('id', $school->district_id)->first();
-
-                $beneficiaryList = [];
-
-                foreach ($beneficiaries as $b) {
-                    $beneficiaryList[] = [
-                        "beneficiary_id" => $b->beneficiary_id,
-                        "beneficiary_no" => $b->beneficiary_no,
-                        "grant_amount" => $b->grant_amount,
-                        "first_name" => $b->first_name,
-                        "last_name" => $b->last_name,
-                        "hhh_fname" => $b->hhh_fname,
-                        "hhh_lname" => $b->hhh_lname,
-                        "hhh_nrc_number" => $b->hhh_nrc_number,
-                        "payment_status" => $b->payment_status,
-                        "images" => $b->images,
-                        "school_accountant_details" => $b->school_accountant_details,
-                        "gps_latitude" => $b->gps_latitude,
-                        "gps_longitude" => $b->gps_longitude,
-                        "gps_altitude" => $b->gps_altitude,
-                        "date_received" => $b->date_received
-                    ];
-                }
-
-                $schoolsArray[] = [
-                    "school_name" => $school->name,
-                    "school_district" => $district->name ?? '',
-                    "school_emis" => $school->code,
-                    "total_beneficiaries" => count($beneficiaryList),
-                    "beneficiaries" => $beneficiaryList
-                ];
-            }
+            $paginated = $query->paginate($perPage);
 
             return response()->json([
                 "status" => true,
                 "current_page" => $paginated->currentPage(),
                 "last_page" => $paginated->lastPage(),
                 "total" => $paginated->total(),
-                "schools" => $schoolsArray
+                "data" => $paginated->items()
             ]);
 
         } catch (\Exception $e) {
