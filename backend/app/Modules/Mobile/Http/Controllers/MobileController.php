@@ -842,26 +842,29 @@ class MobileController extends Controller
                     // 🔥 Logging (kept)
                     Log::info($item['TransactionId'] . ": Lat: ".$item['GpsLatitude']." Long: ".$item['GpsLongitude']." Alt: ". $item['GpsAltitude']);
 
-                    // 🔥 ALWAYS INSERT (no duplicate check)
-                    DB::table('sa_app_beneficiary_transaction_status')->insert([
-                        'payment_request_id' => $paymentRequestId, // ✅ NEW FIELD
+                    DB::table('sa_app_beneficiary_transaction_status')->updateOrInsert(
+                        [
+                            'transaction_id' => $item['TransactionId'],
+                        ],
+                        [
+                            'payment_request_id' => $paymentRequestId,
 
-                        'transaction_id' => $item['TransactionId'],
-                        'beneficiary_no' => $item['BeneficiaryNo'],
-                        'payment_status' => $item['PaymentStatus'],
-                        'payment_status_id' => $statusId,
-                        'images' => implode(',', $item['ImageIDs']),
-                        'date_received' => $item['DateReceived'],
-                        'gps_latitude'  => $item['GpsLatitude'] ?? null,
-                        'gps_longitude' => $item['GpsLongitude'] ?? null,
-                        'gps_altitude'  => $item['GpsAltitude'] ?? null,
-                        'gps_timestamp' => !empty($item['GpsTimestamp']) 
-                        ? (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s') 
-                        : null,
-                        'school_accountant_details' => $item['SchoolAccountantDetails'],
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                            'beneficiary_no' => $item['BeneficiaryNo'],
+                            'payment_status' => $item['PaymentStatus'],
+                            'payment_status_id' => $statusId,
+                            'images' => implode(',', $item['ImageIDs']),
+                            'date_received' => $item['DateReceived'],
+                            'gps_latitude'  => $item['GpsLatitude'] ?? null,
+                            'gps_longitude' => $item['GpsLongitude'] ?? null,
+                            'gps_altitude'  => $item['GpsAltitude'] ?? null,
+                            'gps_timestamp' => !empty($item['GpsTimestamp']) 
+                                ? (new \DateTime($item['GpsTimestamp']))->format('Y-m-d H:i:s') 
+                                : null,
+                            'school_accountant_details' => $item['SchoolAccountantDetails'],
+                            'updated_at' => now(),
+                            'created_at' => now(),
+                        ]
+                    );
 
                     // Log user activity
                     DB::table('sa_user_activity_logs')->insert([
