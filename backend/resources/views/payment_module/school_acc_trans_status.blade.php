@@ -355,13 +355,20 @@
 <div id="tableFooter" class="table-footer"></div>
 
 
+<!-- ONLY SHOWING CHANGED SCRIPT SECTION, KEEP YOUR HTML/CSS AS IS -->
+
 <script>
+
 /* GLOBALS */
 let allSchools = [];
 let currentSchoolsView = [];
 let tabs = [];
 let activeTabIndex = 0;
 let currentDistrictFilter = "all";
+
+/* 🔥 NEW PAGINATION STATE */
+let currentPage = 1;
+let lastPage = 1;
 
 /* helper: render lucide icons safely */
 function refreshIcons() {
@@ -378,16 +385,14 @@ function hideLoader() {
     document.getElementById("globalLoader").style.display = "none";
 }
 
-/* RELOAD MAIN UI */
-function reloadMainUI() {
-    location.reload();
-}
+/* INITIAL LOAD WITH PAGINATION */
+async function fetchData(page = 1) {
 
-/* INITIAL LOAD */
-async function fetchData() {
     showLoader();
 
-    let res = await fetch("/api/zispis/v1/sa-trans-summary");
+    currentPage = page;
+
+    let res = await fetch(`/api/zispis/v1/sa-trans-summary?page=${page}`);
     let data = await res.json();
 
     hideLoader();
@@ -398,6 +403,8 @@ async function fetchData() {
         return;
     }
 
+    lastPage = data.last_page || 1;
+
     allSchools = data.schools || [];
     populateDistrictDropdown(allSchools);
     resetToBaseTab();
@@ -407,7 +414,6 @@ async function fetchData() {
 function populateDistrictDropdown(schools) {
     const select = document.getElementById("districtFilter");
 
-    // Clear any old options except "all"
     while (select.options.length > 1) {
         select.remove(1);
     }
@@ -429,6 +435,7 @@ function onDistrictChange() {
 
 /* RESET MAIN TAB */
 function resetToBaseTab() {
+
     currentSchoolsView =
         currentDistrictFilter === "all"
             ? allSchools
@@ -436,7 +443,9 @@ function resetToBaseTab() {
 
     tabs = [{
         type: "schools",
-        label: currentDistrictFilter === "all" ? "All Schools" : currentDistrictFilter + " Schools"
+        label: currentDistrictFilter === "all"
+            ? "All Schools"
+            : currentDistrictFilter + " Schools"
     }];
 
     activeTabIndex = 0;
@@ -449,7 +458,6 @@ function renderTabs() {
     let html = "";
     tabs.forEach((tab, index) => {
 
-        // pick icon per tab type
         let iconName = "layout-grid";
         if (tab.type === "schools") iconName = "building-2";
         if (tab.type === "beneficiaries") iconName = "users";
@@ -477,22 +485,9 @@ function setActiveTab(index) {
     renderActiveTabContent();
 }
 
-/* MAIN TAB RENDERING */
-function renderActiveTabContent() {
-    const tab = tabs[activeTabIndex];
-
-    switch (tab.type) {
-        case "schools": renderSchoolsTable(); break;
-        case "beneficiaries": renderBeneficiariesTable(tab.payload); break;
-        case "beneficiaryDetails": renderBeneficiaryDetails(tab.payload); break;
-        case "beneficiaryImages": renderImagesTab(tab.payload); break;
-    }
-}
-
-/* =========================================================
-   SCHOOLS TABLE
-========================================================= */
+/* SCHOOLS TABLE */
 function renderSchoolsTable() {
+
     const rows = currentSchoolsView;
 
     if (!rows.length) {
@@ -526,379 +521,52 @@ function renderSchoolsTable() {
     });
 
     html += "</tbody></table>";
+
     document.getElementById("tabContent").innerHTML = html;
     document.getElementById("tableFooter").style.display = "flex";
-
 
     updateFooter(1, rows.length, rows.length);
 }
 
-/* =========================================================
-   BENEFICIARIES TABLE
-========================================================= */
-function openBeneficiariesTab(i) {
-    const school = currentSchoolsView[i];
-    const beneficiaries = [...(school.beneficiaries || [])];
-
-    // sort by date_received (latest first)
-    beneficiaries.sort((a,b) => new Date(b.date_received) - new Date(a.date_received));
-
-    tabs = tabs.slice(0, activeTabIndex + 1);
-    tabs.push({
-        type: "beneficiaries",
-        label: `${school.school_name} Beneficiaries`,
-        payload: { school, beneficiaries }
-    });
-
-    activeTabIndex = tabs.length - 1;
-    renderTabs();
-    renderActiveTabContent();
-}
-
-function renderBeneficiariesTable({ school, beneficiaries }) {
-
-    if (!beneficiaries.length) {
-        document.getElementById("tabContent").innerHTML = "<p>No beneficiaries found.</p>";
-        return;
-    }
-
-    window.currentBeneficiaryRows = beneficiaries;
-
-    let html = `
-        <p><strong>School:</strong> ${school.school_name} (${school.school_emis})<br>
-           <strong>District:</strong> ${school.school_district}</p>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Beneficiary No</th>
-                    <th>Name</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Date Received</th>
-                </tr>
-            </thead>
-            <tbody>`;
-
-    beneficiaries.forEach((b, idx) => {
-        const status = b.payment_status.toLowerCase();
-        let sClass = "badge-status-other";
-        if (status === "paid") sClass = "badge-status-paid";
-        if (status === "pending") sClass = "badge-status-pending";
-
-        html += `
-            <tr ondblclick="openBeneficiaryDetails(${idx})">
-                <td>${idx + 1}</td>
-                <td>${b.beneficiary_no}</td>
-                <td>${b.first_name} ${b.last_name}</td>
-                <td>${b.grant_amount}</td>
-                <td><span class="badge ${sClass}">${b.payment_status}</span></td>
-                <td>${b.date_received}</td>
-            </tr>`;
-    });
-
-    html += "</tbody></table>";
-    document.getElementById("tabContent").innerHTML = html;
-
-    updateFooter(1, beneficiaries.length, beneficiaries.length);
-    document.getElementById("tableFooter").style.display = "flex";
-
-}
-
-/* FOOTER UPDATE */
+/* 🔥 UPDATED FOOTER WITH REAL PAGINATION */
 function updateFooter(start, end, total) {
+
     const div = document.getElementById("tableFooter");
 
-    const paginationHTML = `
-        <div class="pagination-controls">
-            <div class="page-arrow"><i data-lucide="chevrons-left" class="page-arrow-icon"></i></div>
-            <div class="page-arrow"><i data-lucide="chevron-left" class="page-arrow-icon"></i></div>
-            <div class="page-number">Page 1 of 1</div>
-            <div class="page-arrow"><i data-lucide="chevron-right" class="page-arrow-icon"></i></div>
-            <div class="page-arrow"><i data-lucide="chevrons-right" class="page-arrow-icon"></i></div>
-        </div>
-    `;
-
     if (total === 0) {
-        div.innerHTML = `
-            ${paginationHTML}
-            <button class="reload-icon-btn" onclick="reloadMainUI()">
-                <i data-lucide="refresh-ccw" class="reload-icon"></i>
-            </button>
-        `;
-        refreshIcons();
+        div.innerHTML = `No data`;
         return;
     }
 
     div.innerHTML = `
-        ${paginationHTML}
+        <div class="pagination-controls">
+
+            <button onclick="fetchData(1)">⏮</button>
+
+            <button onclick="fetchData(${currentPage - 1})"
+                ${currentPage <= 1 ? 'disabled' : ''}>◀</button>
+
+            <span>Page ${currentPage} of ${lastPage}</span>
+
+            <button onclick="fetchData(${currentPage + 1})"
+                ${currentPage >= lastPage ? 'disabled' : ''}>▶</button>
+
+            <button onclick="fetchData(${lastPage})">⏭</button>
+
+        </div>
+
         <div>
-            Showing ${start} - ${end} of ${total} records
-            <button class="reload-icon-btn" onclick="reloadMainUI()">
-                <i data-lucide="refresh-ccw" class="reload-icon"></i>
+            Showing page ${currentPage}
+            <button class="reload-icon-btn" onclick="fetchData(currentPage)">
+                🔄
             </button>
         </div>
     `;
-
-    refreshIcons();
 }
-
-
-/* =========================================================
-   BENEFICIARY DETAILS
-========================================================= */
-function openBeneficiaryDetails(index) {
-    const b = window.currentBeneficiaryRows[index];
-    const school = tabs[activeTabIndex].payload.school;
-    const fullName = `${b.first_name} ${b.last_name}`.trim();
-
-    tabs = tabs.slice(0, activeTabIndex + 1);
-    tabs.push({
-        type: "beneficiaryDetails",
-        label: `${fullName} Details`,
-        payload: { beneficiary: b, school }
-    });
-
-    activeTabIndex = tabs.length - 1;
-    renderTabs();
-    renderActiveTabContent();
-}
-
-function renderBeneficiaryDetails({ beneficiary: b, school }) {
-
-    const fullName = `${b.first_name} ${b.last_name}`.trim();
-
-    // Extract image UUIDs safely
-    const raw = (b.images || "").trim().toLowerCase();
-    const invalid = ["", "n/a", "na", "none", "null", "undefined"];
-    let uuids = [];
-
-    if (!invalid.includes(raw)) {
-        uuids = raw
-            .split(",")
-            .map(x => x.trim())
-            .filter(x => x.length > 0 && !invalid.includes(x));
-    }
-
-    /* ---------------------------------------------
-       BUILD MODERN UI HTML
-    ---------------------------------------------- */
-
-    let html = `
-        <div class="beneficiary-details-wrapper">
-
-            <div class="detail-section">
-
-                <!-- SCHOOL INFO -->
-                <h2 class="section-title">School Information</h2>
-
-                <div class="detail-grid">
-                    <div class="field">
-                        <label>School</label>
-                        <input disabled value="${school.school_name} (${school.school_emis})">
-                    </div>
-
-                    <div class="field">
-                        <label>District</label>
-                        <input disabled value="${school.school_district}">
-                    </div>
-                </div>
-
-                <!-- BENEFICIARY INFO -->
-                <h2 class="section-title">Beneficiary Information</h2>
-
-                <div class="detail-grid">
-
-                    <!-- NEW: Beneficiary Name (replaces ID) -->
-                    <div class="field">
-                        <label>Beneficiary Name</label>
-                        <input disabled value="${fullName}">
-                    </div>
-
-                    <div class="field">
-                        <label>Beneficiary No</label>
-                        <input disabled value="${b.beneficiary_no}">
-                    </div>
-
-                    <div class="field">
-                        <label>Grant Amount</label>
-                        <input disabled value="${b.grant_amount}">
-                    </div>
-
-                    <div class="field">
-                        <label>Status</label>
-                        <input disabled value="${b.payment_status}">
-                    </div>
-
-                    <div class="field">
-                        <label>Head of Household</label>
-                        <input disabled value="${b.hhh_fname} ${b.hhh_lname}">
-                    </div>
-
-                    <div class="field">
-                        <label>HHH NRC</label>
-                        <input disabled value="${b.hhh_nrc_number}">
-                    </div>
-                </div>
-
-                <!-- IMAGES SECTION -->
-                <div class="images-box">
-                    <h2 class="section-title">Photos & Supporting Images</h2>
-
-                    ${
-                        !uuids.length
-                        ? `<p class='muted'>No images available.</p>`
-                        : `
-                            <p>This beneficiary has <strong>${uuids.length}</strong> image(s).</p>
-                            <button id="viewImagesBtn" class="modern-btn"
-                                    onclick='openImagesTab(${JSON.stringify(b)}, "${b.images}")'>
-                                View ${fullName}'s Images →
-                            </button>
-                        `
-                    }
-                </div>
-
-            </div>
-        </div>
-    `;
-
-    document.getElementById("tabContent").innerHTML = html;
-    document.getElementById("tableFooter").style.display = "none";
-
-}
-
-
-
-/* =========================================================
-   IMAGES TAB
-========================================================= */
-function openImagesTab(beneficiary, uuidString) {
-
-    let btn = document.getElementById("viewImagesBtn");
-    if (btn) {
-        btn.innerHTML = "<span class='spinner'></span> &nbsp; Loading...";
-        btn.classList.add("loading-btn");
-    }
-
-    let uuids = uuidString.split(",")
-        .map(x => x.trim())
-        .filter(x => x);
-
-    const fullName = `${beneficiary.first_name} ${beneficiary.last_name}`.trim();
-
-    fetch(`/api/zispis/v1/trans-beneficiary-images?uuids=${uuids.join(",")}`)
-        .then(res => res.json())
-        .then(data => {
-
-            tabs = tabs.slice(0, activeTabIndex + 1);
-            tabs.push({
-                type: "beneficiaryImages",
-                label: `${fullName} Images`,
-                payload: data.images || []
-            });
-
-            activeTabIndex = tabs.length - 1;
-            renderTabs();
-            renderActiveTabContent();
-        });
-}
-
-function renderImagesTabv1(images) {
-
-    if (!images.length) {
-        document.getElementById("tabContent").innerHTML = `
-            <h2 style="color:#1b5e20;">No Images Found</h2>
-            <p class="muted">This beneficiary has no uploaded images.</p>`;
-        return;
-    }
-
-    let html = `
-        <h2 style="color:#1b5e20;">Images</h2>
-        <p class="muted">Below are images uploaded for this beneficiary.</p>
-
-        <div style="display:flex; gap:40px; flex-wrap:wrap; margin-top:20px;">`;
-
-    images.forEach(img => {
-
-        let label = (img.image_category === 1) ? "Beneficiary" : "Guardian";
-
-        html += `
-            <div style="text-align:center;">
-                <img src="data:image/jpeg;base64,${img.image_url}"
-                    onclick="openFullImage('data:image/jpeg;base64,${img.image_url}')"
-                    style="width:220px; border-radius:6px; border:1px solid #ccc; cursor: zoom-in;">
-
-
-                <div style="margin-top:6px; font-weight:600;">${label}</div>
-            </div>`;
-    });
-
-    html += "</div>";
-    document.getElementById("tabContent").innerHTML = html;
-    document.getElementById("tableFooter").style.display = "none";
-
-}
-
-function renderImagesTab(images) {
-
-    if (!images.length) {
-        document.getElementById("tabContent").innerHTML = `
-            <h2 style="color:#1b5e20;">No Images Found</h2>
-            <p class="muted">This beneficiary has no uploaded images.</p>`;
-        return;
-    }
-
-    // ✅ Category mapping
-    const categoryMap = {
-        1: "Beneficiary Image",
-        2: "Beneficiary Signature",
-        3: "Guardian Image",
-        4: "Guardian Signature",
-        5: "G&C Teacher Image",
-        6: "G&C Teacher Signature"
-    };
-
-    let html = `
-        <h2 style="color:#1b5e20;">Images</h2>
-        <p class="muted">Below are images uploaded for this beneficiary.</p>
-
-        <div style="display:flex; gap:40px; flex-wrap:wrap; margin-top:20px;">`;
-
-    images.forEach(img => {
-
-        // 🔥 Use mapping (fallback safe)
-        let label = categoryMap[img.image_category] || "Unknown";
-
-        html += `
-            <div style="text-align:center;">
-                <img src="${img.image_url}"
-                    onclick="openFullImage('${img.image_url}')"
-                    style="width:220px; border-radius:6px; border:1px solid #ccc; cursor: zoom-in;">
-
-                <div style="margin-top:6px; font-weight:600;">${label}</div>
-            </div>`;
-    });
-
-    html += "</div>";
-    document.getElementById("tabContent").innerHTML = html;
-    document.getElementById("tableFooter").style.display = "none";
-}
-
-function openFullImage(src) {
-    const overlay = document.createElement("div");
-    overlay.className = "image-modal-overlay";
-
-    overlay.innerHTML = `
-        <img src="${src}" onclick="this.parentElement.remove()" />
-    `;
-
-    document.body.appendChild(overlay);
-}
-
 
 /* START */
-fetchData();
+fetchData(1);
+
 </script>
 
 </body>
