@@ -246,6 +246,33 @@
             text-align: center;
             color: #777;
         }
+
+        /* TABS */
+        .tabs-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 8px 14px;
+            border-radius: 20px;
+            background: #e8f5e9;
+            color: #1b5e20;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .tab:hover {
+            background: #c8e6c9;
+        }
+
+        .tab.active {
+            background: #1b5e20;
+            color: white;
+        }
     </style>
 </head>
 
@@ -259,6 +286,7 @@
         <option value="">Select District</option>
     </select>
 
+    <div id="tabsBar" class="tabs-bar"></div>
     <div id="content" class="empty">
         Please select a district to view data
     </div>
@@ -278,6 +306,35 @@
 let currentSchool = null;
 let currentPage = 1;
 let loaderStart = 0;
+let tabs = [];
+
+function renderTabs() {
+
+    let html = "";
+
+    tabs.forEach((tab, index) => {
+
+        html += `
+            <div class="tab ${index === tabs.length-1 ? 'active' : ''}"
+                 onclick="goToTab(${index})">
+                ${tab.label}
+            </div>
+        `;
+    });
+
+    document.getElementById("tabsBar").innerHTML = html;
+}
+
+function goToTab(index) {
+
+    // 🔥 remove future tabs
+    tabs = tabs.slice(0, index + 1);
+
+    renderTabs();
+
+    // 🔥 run the stored function
+    tabs[index].action();
+}
 
 /* ======================
    ENTERPRISE LOADER
@@ -330,6 +387,13 @@ async function loadSchools(){
 
     showLoader("Fetching schools...");
 
+    tabs = [{
+        label: "Schools",
+        action: () => loadSchools()
+    }];
+
+    renderTabs();
+
     let res = await fetch(`/api/zispis/v1/sa-schools?district_id=${districtId}`);
     let data = await res.json();
 
@@ -358,6 +422,13 @@ async function loadSchools(){
 function openSchool(id){
     currentSchool = id;
     currentPage = 1;
+
+    tabs.push({
+        label: "Beneficiaries",
+        action: () => loadBeneficiaries()
+    });
+
+    renderTabs();
     loadBeneficiaries();
 }
 
@@ -417,6 +488,13 @@ async function openBeneficiary(beneficiaryNo, imageString) {
 
     showLoader("Loading beneficiary details...");
 
+    tabs.push({
+        label: beneficiaryNo, // or replace with name later
+        action: () => openBeneficiary(beneficiaryNo, imageString)
+    });
+
+    renderTabs();
+
     try {
 
         /* ======================
@@ -433,6 +511,9 @@ async function openBeneficiary(beneficiaryNo, imageString) {
         }
 
         let b = data.data;
+
+        tabs[tabs.length - 1].label = b.first_name + " " + b.last_name;
+        renderTabs();   
 
         /* ======================
            FETCH IMAGES
