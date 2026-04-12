@@ -35,26 +35,50 @@
 
         /* TABLE */
         table {
-            width:100%;
+            width: 100%;
             border-collapse: collapse;
-            margin-top:10px;
+            margin-top: 15px;
+            font-size: 14px;
         }
 
+        /* HEADER */
         th {
-            background:#1b5e20;
-            color:white;
-            text-align:left;
-            padding:12px;
+            background: #1b5e20;
+            color: white;
+            text-align: left;              /* 🔥 FIX */
+            padding: 12px 14px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
         }
 
+        /* CELLS */
         td {
-            padding:12px;
-            border-bottom:1px solid #eee;
+            padding: 12px 14px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;              /* 🔥 FIX */
+            color: #333;
         }
 
-        tr:hover {
-            background:#e8f5e9;
-            cursor:pointer;
+        /* ROWS */
+        tbody tr {
+            transition: background 0.2s ease;
+        }
+
+        /* ZEBRA STRIPES */
+        tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        /* HOVER */
+        tbody tr:hover {
+            background: #e8f5e9;
+            cursor: pointer;
+        }
+
+        /* OPTIONAL: tighter numeric columns */
+        td:last-child,
+        th:last-child {
+            text-align: right;             /* numbers align right */
         }
 
         /* BUTTONS */
