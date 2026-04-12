@@ -6613,6 +6613,48 @@ class MobileController extends Controller
             "data" => $paginated->items()
         ]);
     }
+    // get beneficiary details
+    public function getSaBeneficiaryDetails(Request $request)
+    {
+        $beneficiaryNo = $request->query('beneficiary_no');
+
+        if (!$beneficiaryNo) {
+            return response()->json([
+                "status" => false,
+                "message" => "Beneficiary number is required"
+            ], 400);
+        }
+
+        $data = DB::table('sa_app_beneficiary_list_5 as b')
+            ->leftJoin('school_information as s', 's.id', '=', 'b.school_id')
+
+            ->where('b.beneficiary_no', $beneficiaryNo)
+
+            ->select(
+                'b.first_name',
+                'b.last_name',
+                'b.beneficiary_no',
+                'b.school_grade',
+                'b.hhh_fname',
+                'b.hhh_lname',
+                'b.hhh_nrc_number',
+                'b.mobile_phone_parent_guardian',
+                's.name as school_name'
+            )
+            ->first();
+
+        if (!$data) {
+            return response()->json([
+                "status" => false,
+                "message" => "No beneficiary found"
+            ]);
+        }
+
+        return response()->json([
+            "status" => true,
+            "data" => $data
+        ]);
+    }
 
     public function getImagesv1(Request $request)
     {

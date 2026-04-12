@@ -77,6 +77,7 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     Route::get('/sa-districts', 'MobileController@getActiveDistrictsSchSubSummary');
     Route::get('/sa-schools', 'MobileController@getSchoolsByDistrict');
     Route::get('/sa-beneficiaries', 'MobileController@getSaBeneficiaries');
+    Route::get('/sa-beneficiary-details', 'MobileController@getSaBeneficiaryDetails');
     Route::get('/trans-beneficiary-images', 'MobileController@getImages');
  
     Route::post('/encrypt-string', 'MobileController@encryptString');

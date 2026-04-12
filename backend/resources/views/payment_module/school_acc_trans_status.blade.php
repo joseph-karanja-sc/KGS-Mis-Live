@@ -157,7 +157,7 @@
 
 <body>
 
-<h1>School Accountant Dashboard</h1>
+<h1>School Accountant Submissions Dashboard</h1>
 
 <div class="card">
 
@@ -289,8 +289,12 @@ async function loadBeneficiaries(){
         </tr>`;
 
     data.data.forEach((b,i)=>{
+
         html += `
-            <tr>
+            <tr 
+                ondblclick="openBeneficiary('${b.beneficiary_no}', '${(b.images || '').replace(/'/g, "\\'")}')"
+                title="Double click to view details"
+            >
                 <td>${i+1}</td>
                 <td>${b.first_name} ${b.last_name}</td>
                 <td>${b.beneficiary_no}</td>
@@ -311,6 +315,174 @@ async function loadBeneficiaries(){
     document.getElementById("content").innerHTML = html;
 
     hideLoader();
+}
+/* ======================
+   LOAD BENEFICIARY RECORD
+====================== */
+async function openBeneficiary(beneficiaryNo, imageString) {
+
+    showLoader("Loading beneficiary details...");
+
+    try {
+
+        /* ======================
+           FETCH META DATA
+        ====================== */
+        let res = await fetch(`/api/zispis/v1/sa-beneficiary-details?beneficiary_no=${beneficiaryNo}`);
+        let data = await res.json();
+
+        if (!data.status) {
+            document.getElementById("content").innerHTML =
+                "<p>No beneficiary data found</p>";
+            hideLoader();
+            return;
+        }
+
+        let b = data.data;
+
+        /* ======================
+           FETCH IMAGES
+        ====================== */
+        let images = [];
+
+        if (imageString && imageString !== "null") {
+            let imgRes = await fetch(`/api/zispis/v1/trans-beneficiary-images?uuids=${imageString}`);
+            let imgData = await imgRes.json();
+            images = imgData.images || [];
+        }
+
+        /* ======================
+           BUILD UI
+        ====================== */
+
+        let html = `
+            <h2>Beneficiary Details</h2>
+
+            <div class="detail-grid">
+
+                <div class="field">
+                    <label>Full Name</label>
+                    <input disabled value="${b.first_name} ${b.last_name}">
+                </div>
+
+                <div class="field">
+                    <label>Beneficiary Number</label>
+                    <input disabled value="${b.beneficiary_no}">
+                </div>
+
+                <div class="field">
+                    <label>School</label>
+                    <input disabled value="${b.school_name || '-'}">
+                </div>
+
+                <div class="field">
+                    <label>Grade</label>
+                    <input disabled value="${b.school_grade || '-'}">
+                </div>
+
+                <div class="field">
+                    <label>Household Head</label>
+                    <input disabled value="${b.hhh_fname} ${b.hhh_lname}">
+                </div>
+
+                <div class="field">
+                    <label>NRC</label>
+                    <input disabled value="${b.hhh_nrc_number || '-'}">
+                </div>
+
+                <div class="field">
+                    <label>Guardian Phone</label>
+                    <input disabled value="${b.mobile_phone_parent_guardian || '-'}">
+                </div>
+
+            </div>
+        `;
+
+        /* ======================
+           IMAGES SECTION
+        ====================== */
+
+        if (!images.length) {
+
+            html += `
+                <div class="images-box">
+                    <h3>Images</h3>
+                    <p class="muted">
+                        No images found for <strong>${b.first_name} ${b.last_name}</strong>
+                    </p>
+                </div>
+            `;
+
+        } else {
+
+            html += `
+                <div class="images-box">
+                    <h3>Images</h3>
+
+                    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+            `;
+
+            const categoryMap = {
+                1: "Beneficiary Image",
+                2: "Beneficiary Signature",
+                3: "Guardian Image",
+                4: "Guardian Signature",
+                5: "Teacher Image",
+                6: "Teacher Signature"
+            };
+
+            images.forEach(img => {
+
+                let label = categoryMap[img.image_category] || "Image";
+
+                html += `
+                    <div style="text-align:center;">
+                        <img src="${img.image_url}"
+                             onclick="openFullImage('${img.image_url}')"
+                             style="width:200px; border-radius:8px; border:1px solid #ddd; cursor:zoom-in;">
+                        <div style="margin-top:5px; font-weight:600;">${label}</div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        }
+
+        document.getElementById("content").innerHTML = html;
+
+    } catch (e) {
+        document.getElementById("content").innerHTML =
+            "<p style='color:red'>Failed to load beneficiary details</p>";
+    }
+
+    hideLoader();
+}
+
+/* ======================
+   FULL SCREEN IMAGE
+====================== */
+function openFullImage(src) {
+
+    const overlay = document.createElement("div");
+
+    overlay.style = `
+        position:fixed;
+        top:0; left:0;
+        width:100%; height:100%;
+        background:rgba(0,0,0,0.85);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:99999;
+    `;
+
+    overlay.innerHTML = `
+        <img src="${src}" 
+             style="max-width:90%; max-height:90%; border-radius:8px;"
+             onclick="this.parentElement.remove()">
+    `;
+
+    document.body.appendChild(overlay);
 }
 
 /* ======================
