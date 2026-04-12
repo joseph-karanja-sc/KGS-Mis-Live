@@ -519,10 +519,26 @@ async function openBeneficiary(beneficiaryNo, imageString) {
            FETCH IMAGES
         ====================== */
         let images = [];
+        let imageStringFromApi = b.images;
 
-        if (imageString && imageString !== "null") {
-            let imgRes = await fetch(`/api/zispis/v1/trans-beneficiary-images?uuids=${imageString}`);
+        console.log("IMAGE STRING FROM API:", imageStringFromApi);
+
+        if (
+            imageStringFromApi &&
+            imageStringFromApi !== "null" &&
+            imageStringFromApi !== "undefined" &&
+            imageStringFromApi.trim() !== ""
+        ) {
+            console.log("CALLING IMAGE API...");
+
+            let imgRes = await fetch(
+                `/api/zispis/v1/trans-beneficiary-images?uuids=${imageStringFromApi}`
+            );
+
             let imgData = await imgRes.json();
+
+            console.log("IMAGES RESPONSE:", imgData);
+
             images = imgData.images || [];
         }
 
