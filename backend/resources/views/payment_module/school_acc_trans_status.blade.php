@@ -152,6 +152,100 @@
             padding:40px;
             color:#777;
         }
+
+        /* BENEFICIARY CARD */
+        .beneficiary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.05);
+        }
+
+        /* HEADER */
+        .beneficiary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .beneficiary-header h2 {
+            margin: 0;
+            color: #1b5e20;
+        }
+
+        .badge {
+            background: #e8f5e9;
+            color: #1b5e20;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        /* GRID */
+        .beneficiary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        /* FIELD */
+        .field label {
+            font-size: 12px;
+            color: #777;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .value {
+            background: #f9fafb;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        /* IMAGES */
+        .images-section {
+            margin-top: 30px;
+        }
+
+        .images-section h3 {
+            margin-bottom: 15px;
+        }
+
+        .image-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .image-card {
+            width: 180px;
+            text-align: center;
+        }
+
+        .image-card img {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        .image-card span {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #555;
+        }
+
+        /* EMPTY STATE */
+        .images-section.empty {
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: #777;
+        }
     </style>
 </head>
 
@@ -356,43 +450,40 @@ async function openBeneficiary(beneficiaryNo, imageString) {
         ====================== */
 
         let html = `
-            <h2>Beneficiary Details</h2>
+        <div class="beneficiary-card">
 
-            <div class="detail-grid">
+            <!-- HEADER -->
+            <div class="beneficiary-header">
+                <h2>${b.first_name} ${b.last_name}</h2>
+                <span class="badge">${b.beneficiary_no}</span>
+            </div>
 
-                <div class="field">
-                    <label>Full Name</label>
-                    <input disabled value="${b.first_name} ${b.last_name}">
-                </div>
-
-                <div class="field">
-                    <label>Beneficiary Number</label>
-                    <input disabled value="${b.beneficiary_no}">
-                </div>
+            <!-- GRID -->
+            <div class="beneficiary-grid">
 
                 <div class="field">
                     <label>School</label>
-                    <input disabled value="${b.school_name || '-'}">
+                    <div class="value">${b.school_name || '-'}</div>
                 </div>
 
                 <div class="field">
                     <label>Grade</label>
-                    <input disabled value="${b.school_grade || '-'}">
+                    <div class="value">${b.school_grade || '-'}</div>
                 </div>
 
                 <div class="field">
                     <label>Household Head</label>
-                    <input disabled value="${b.hhh_fname} ${b.hhh_lname}">
+                    <div class="value">${b.hhh_fname} ${b.hhh_lname}</div>
                 </div>
 
                 <div class="field">
                     <label>NRC</label>
-                    <input disabled value="${b.hhh_nrc_number || '-'}">
+                    <div class="value">${b.hhh_nrc_number || '-'}</div>
                 </div>
 
                 <div class="field">
                     <label>Guardian Phone</label>
-                    <input disabled value="${b.mobile_phone_parent_guardian || '-'}">
+                    <div class="value">${b.mobile_phone_parent_guardian || '-'}</div>
                 </div>
 
             </div>
@@ -405,29 +496,26 @@ async function openBeneficiary(beneficiaryNo, imageString) {
         if (!images.length) {
 
             html += `
-                <div class="images-box">
+                <div class="images-section empty">
                     <h3>Images</h3>
-                    <p class="muted">
-                        No images found for <strong>${b.first_name} ${b.last_name}</strong>
-                    </p>
+                    <p>No images found for <strong>${b.first_name} ${b.last_name}</strong></p>
                 </div>
             `;
 
         } else {
 
             html += `
-                <div class="images-box">
+                <div class="images-section">
                     <h3>Images</h3>
-
-                    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                    <div class="image-grid">
             `;
 
             const categoryMap = {
-                1: "Beneficiary Image",
-                2: "Beneficiary Signature",
-                3: "Guardian Image",
+                1: "Beneficiary",
+                2: "Signature",
+                3: "Guardian",
                 4: "Guardian Signature",
-                5: "Teacher Image",
+                5: "Teacher",
                 6: "Teacher Signature"
             };
 
@@ -436,17 +524,17 @@ async function openBeneficiary(beneficiaryNo, imageString) {
                 let label = categoryMap[img.image_category] || "Image";
 
                 html += `
-                    <div style="text-align:center;">
-                        <img src="${img.image_url}"
-                             onclick="openFullImage('${img.image_url}')"
-                             style="width:200px; border-radius:8px; border:1px solid #ddd; cursor:zoom-in;">
-                        <div style="margin-top:5px; font-weight:600;">${label}</div>
+                    <div class="image-card">
+                        <img src="${img.image_url}" onclick="openFullImage('${img.image_url}')">
+                        <span>${label}</span>
                     </div>
                 `;
             });
 
             html += `</div></div>`;
         }
+
+        html += `</div>`;
 
         document.getElementById("content").innerHTML = html;
 
