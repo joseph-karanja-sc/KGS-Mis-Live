@@ -6543,6 +6543,84 @@ class MobileController extends Controller
         }
     }
 
+    //get districts for sch acc app submissions
+    public function getActiveDistrictsSchSubSummary()
+    {
+        $districts = DB::table('sa_app_beneficiary_transaction_status as t1')
+            ->join('sa_app_beneficiary_list_5 as b5', 'b5.beneficiary_no', '=', 't1.beneficiary_no')
+            ->join('school_information as s', 's.id', '=', 'b5.school_id')
+            ->join('districts as d', 'd.id', '=', 's.district_id')
+
+            ->where('t1.date_received', '>', '2025-12-01')
+
+            ->select('d.id', 'd.name')
+            ->distinct()
+            ->orderBy('d.name')
+            ->get();
+
+        return response()->json([
+            "status" => true,
+            "districts" => $districts
+        ]);
+    }
+    // get schools for sch acc app submissions
+    public function getSchoolsByDistrict(Request $request)
+    {
+        $districtId = $request->query('district_id');
+
+        $schools = DB::table('sa_app_beneficiary_transaction_status as t1')
+            ->join('sa_app_beneficiary_list_5 as b5', 'b5.beneficiary_no', '=', 't1.beneficiary_no')
+            ->join('school_information as s', 's.id', '=', 'b5.school_id')
+
+            ->where('s.district_id', $districtId)
+
+            ->select(
+                's.id',
+                's.name',
+                's.code',
+                DB::raw('COUNT(*) as total')
+            )
+            ->groupBy('s.id', 's.name', 's.code')
+            ->orderBy('s.name')
+            ->get();
+
+        return response()->json([
+            "status" => true,
+            "schools" => $schools
+        ]);
+    }
+    // get beneficiaries for sch acc app submissions
+    public function getSaBeneficiaries(Request $request)
+    {
+        $schoolId = $request->query('school_id');
+
+        $perPage = 5;
+
+        $query = DB::table('sa_app_beneficiary_transaction_status as t1')
+            ->join('sa_app_beneficiary_list_5 as b5', 'b5.beneficiary_no', '=', 't1.beneficiary_no')
+            ->where('b5.school_id', $schoolId)
+
+            ->select(
+                't1.id',
+                't1.payment_status',
+                't1.date_received',
+                'b5.beneficiary_no',
+                'b5.first_name',
+                'b5.last_name',
+                'b5.grant_amount'
+            )
+            ->orderBy('t1.id', 'desc');
+
+        $paginated = $query->paginate($perPage);
+
+        return response()->json([
+            "status" => true,
+            "current_page" => $paginated->currentPage(),
+            "last_page" => $paginated->lastPage(),
+            "data" => $paginated->items()
+        ]);
+    }
+
     public function getImagesv1(Request $request)
     {
         $uuidsRaw = $request->query('uuids');

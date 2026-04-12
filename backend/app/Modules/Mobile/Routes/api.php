@@ -72,7 +72,11 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
     // endpoint to disburse payments to pg in batch
     Route::post('/processAllSchoolsForPG', 'MobileController@processAllSchoolsForPG');
 
+    //sch acc app mis submissions
     Route::get('/sa-trans-summary', 'MobileController@getSchoolTransactionSummary');
+    Route::get('/sa-distrists', 'MobileController@getActiveDistrictsSchSubSummary');
+    Route::get('/sa-schools', 'MobileController@getSchoolsByDistrict');
+    Route::get('/sa-beneficiaries', 'MobileController@getSaBeneficiaries');
     Route::get('/trans-beneficiary-images', 'MobileController@getImages');
  
     Route::post('/encrypt-string', 'MobileController@encryptString');
