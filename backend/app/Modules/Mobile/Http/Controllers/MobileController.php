@@ -6626,7 +6626,14 @@ class MobileController extends Controller
         }
 
         $data = DB::table('sa_app_beneficiary_list_5 as b')
+
+            // 🔥 JOIN SCHOOL
             ->leftJoin('school_information as s', 's.id', '=', 'b.school_id')
+
+            // 🔥 JOIN TRANSACTIONS (FOR IMAGES)
+            ->leftJoin('sa_app_beneficiary_transaction_status as t', function ($join) {
+                $join->on('t.beneficiary_no', '=', 'b.beneficiary_no');
+            })
 
             ->where('b.beneficiary_no', $beneficiaryNo)
 
@@ -6639,8 +6646,15 @@ class MobileController extends Controller
                 'b.hhh_lname',
                 'b.hhh_nrc_number',
                 'b.mobile_phone_parent_guardian',
-                's.name as school_name'
+                's.name as school_name',
+
+                // 🔥 IMPORTANT
+                't.images'
             )
+
+            // 🔥 GET LATEST RECORD (important if multiple exist)
+            ->orderBy('t.id', 'desc')
+
             ->first();
 
         if (!$data) {
