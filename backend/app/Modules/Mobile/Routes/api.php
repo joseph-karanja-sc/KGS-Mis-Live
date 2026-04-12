@@ -74,7 +74,7 @@ Route::prefix(config('app.api_env_prefix'))->group(function () {
 
     //sch acc app mis submissions
     Route::get('/sa-trans-summary', 'MobileController@getSchoolTransactionSummary');
-    Route::get('/sa-distrists', 'MobileController@getActiveDistrictsSchSubSummary');
+    Route::get('/sa-districts', 'MobileController@getActiveDistrictsSchSubSummary');
     Route::get('/sa-schools', 'MobileController@getSchoolsByDistrict');
     Route::get('/sa-beneficiaries', 'MobileController@getSaBeneficiaries');
     Route::get('/trans-beneficiary-images', 'MobileController@getImages');

@@ -38,7 +38,7 @@ let currentPage = 1;
 ====================== */
 async function loadDistricts() {
 
-    let res = await fetch('/api/zispis/v1/sa-distrists');
+    let res = await fetch('/api/zispis/v1/sa-districts');
     let data = await res.json();
 
     let select = document.getElementById("districtSelect");
