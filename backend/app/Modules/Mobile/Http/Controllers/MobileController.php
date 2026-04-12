@@ -6546,16 +6546,9 @@ class MobileController extends Controller
     //get districts for sch acc app submissions
     public function getActiveDistrictsSchSubSummary()
     {
-        $districts = DB::table('sa_app_beneficiary_transaction_status as t1')
-            ->join('sa_app_beneficiary_list_5 as b5', 'b5.beneficiary_no', '=', 't1.beneficiary_no')
-            ->join('school_information as s', 's.id', '=', 'b5.school_id')
-            ->join('districts as d', 'd.id', '=', 's.district_id')
-
-            ->where('t1.date_received', '>', '2025-12-01')
-
-            ->select('d.id', 'd.name')
-            ->distinct()
-            ->orderBy('d.name')
+        $districts = DB::table('districts')
+            ->select('id', 'name')
+            ->orderBy('name')
             ->get();
 
         return response()->json([
