@@ -22,4 +22,5 @@ Route::group(['prefix' => 'mobile'], function () {
 	Route::post('syncGrm', 'MobileController@syncGrm');
 	// MNE
     Route::post('post-mne-data', 'MobileController@postMNEData');
+	Route::get('get-loggedin-user', 'MobileController@getLoggedInUser');
 });

@@ -80,9 +80,9 @@
     </div>
 
     <div class="top-actions">
-        <button class="retry-all-btn" onclick="confirmRetryAll()">
+        <!-- <button class="retry-all-btn" onclick="confirmRetryAll()">
             <i class="fas fa-redo"></i> Retry All
-        </button>
+        </button> -->
 
         <button class="refresh-btn" onclick="loadData(1)">
             <i class="fas fa-sync"></i> Refresh

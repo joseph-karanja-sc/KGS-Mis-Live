@@ -6768,6 +6768,46 @@ class MobileController extends Controller
         ]);
     }
 
+    public function getLoggedInUser()
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No authenticated user found.',
+                'code'    => 401
+            ], 401);
+        }
+
+        $profileImage = DB::table('user_images')
+            ->where('user_id', $user->id)
+            ->value('saved_name');
+
+        $baseUrl    = url('/');
+        $profileUrl = $profileImage
+            ? $baseUrl . '/resources/images/user-profile/' . $profileImage
+            : null;
+
+        $userData = [
+            'user_id'               => $user->id,
+            'uuid'                  => $user->uuid,
+            'first_name'            => $user->first_name,
+            'last_name'             => $user->last_name,
+            'email'                 => aes_decrypt($user->email), // decrypt since email is stored encrypted
+            'phone'                 => $user->phone,
+            'profile_url'           => $profileUrl,
+            'allocated_district_id' => $user->allocated_district_id,
+            'has_kgs_app_access'    => $user->has_kgs_app_access,
+            'is_app_admin'          => 0,
+        ];
+
+        return response()->json([
+            'success' => true,
+            'code'    => 200,
+            'user'    => $userData
+        ]);
+    }
 
     public function migrateBeneficiariesToReport()
     {
