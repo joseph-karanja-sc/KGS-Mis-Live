@@ -3556,19 +3556,15 @@ class Reports extends Controller
 
     public function getDisbursementReportPayReqDetails($school_id, $year)
     {
-        $qry = DB::table('payment_disbursement_details as t1')
+        $qry = DB::table('beneficiary_payresponses_report as t1')
             ->join('school_information as t2', 't1.school_id', '=', 't2.id')
             ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
             ->join('districts as t4', 't4.id', '=', 't2.district_id')
             ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
-            ->join('beneficiary_enrollments as t7', function ($join) {
-                $join->on('t7.id', '=', 't6.enrollment_id')
-                    ->on('t7.school_id', '=', 't1.school_id');
-            })
-            ->join('beneficiary_information as t8', 't7.beneficiary_id', '=', 't8.id')
+            ->join('beneficiary_information as t8', 't1.beneficiary_id', '=', 't8.id')
             ->select(DB::raw('t3.payment_ref_no, t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
                               count(t6.enrollment_id) as no_of_beneficiaries,t2.id as school_id,t4.id as district_id,decrypt(t1.amount_transfered) as total_disbursement,
-                              decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name,sum(decrypt(t7.annual_fees)) as total_school_fees'))
+                              decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name,sum(t1.total_payable_fees) as total_school_fees'))
             ->where('t3.payment_year', $year)
             // ->where('t3.payment_ref_no','KGS/PAY/REQ/2025/0002')
             ->where('t2.id', $school_id)
@@ -3576,27 +3572,71 @@ class Reports extends Controller
         $results = $qry->get();
         return $results;
     }
+    // public function getDisbursementReportPayReqDetails($school_id, $year)
+    // {
+    //     $qry = DB::table('payment_disbursement_details as t1')
+    //         ->join('school_information as t2', 't1.school_id', '=', 't2.id')
+    //         ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
+    //         ->join('districts as t4', 't4.id', '=', 't2.district_id')
+    //         ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
+    //         ->join('beneficiary_enrollments as t7', function ($join) {
+    //             $join->on('t7.id', '=', 't6.enrollment_id')
+    //                 ->on('t7.school_id', '=', 't1.school_id');
+    //         })
+    //         ->join('beneficiary_information as t8', 't7.beneficiary_id', '=', 't8.id')
+    //         ->select(DB::raw('t3.payment_ref_no, t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
+    //                           count(t6.enrollment_id) as no_of_beneficiaries,t2.id as school_id,t4.id as district_id,decrypt(t1.amount_transfered) as total_disbursement,
+    //                           decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name,sum(decrypt(t7.annual_fees)) as total_school_fees'))
+    //         ->where('t3.payment_year', $year)
+    //         // ->where('t3.payment_ref_no','KGS/PAY/REQ/2025/0002')
+    //         ->where('t2.id', $school_id)
+    //         ->groupBy('t3.id');
+    //     $results = $qry->get();
+    //     return $results;
+    // }
 
     public function printDisbursementReportPaidBeneficiaries($school_id, $year)
     {
-        $qry = DB::table('payment_disbursement_details as t1')
+        $qry = DB::table('beneficiary_payresponses_report as t1')
             ->join('school_information as t2', 't1.school_id', '=', 't2.id')
             ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
             ->join('districts as t4', 't4.id', '=', 't2.district_id')
             ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
-            ->join('beneficiary_enrollments as t7', function ($join) {
-                $join->on('t7.id', '=', 't6.enrollment_id')
-                    ->on('t7.school_id', '=', 't1.school_id');
-            })
-            ->join('beneficiary_information as t8', 't7.beneficiary_id', '=', 't8.id')
-            ->leftJoin('beneficiary_school_statuses as t9', 't7.beneficiary_schoolstatus_id', '=', 't9.id')
+            // ->join('beneficiary_enrollments as t7', function ($join) {
+            //     $join->on('t7.id', '=', 't6.enrollment_id')
+            //         ->on('t7.school_id', '=', 't1.school_id');
+            // })
+            ->join('beneficiary_information as t8', 't1.beneficiary_id', '=', 't8.id')
+            ->leftJoin('beneficiary_school_statuses as t9', 't1.beneficiary_schoolstatus_id', '=', 't9.id')
             ->select(DB::raw('distinct(t8.id), t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
-                              t2.id as school_id,t4.id as district_id,t7.school_grade,t9.name as school_status_name,decrypt(t7.term1_fees) as term1_fees,decrypt(t7.term2_fees) as term2_fees,
-                              decrypt(t7.term3_fees) as term3_fees,decrypt(t7.exam_fees) as exam_fees,decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name,decrypt(t7.annual_fees) as school_fees'))
+                              t2.id as school_id,t4.id as district_id,t1.confirmed_grade as school_grade,t9.name as school_status_name,
+                              t1.term1_fee as term1_fees,t1.term2_fee as term2_fees,
+                              t1.term3_fee as term3_fees,t1.exam_fees,
+                              decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name, t1.total_payable_fees as school_fees'))
             ->where('t3.payment_year', $year)
             ->where('t2.id', $school_id);
         return $qry->get();
     }
+    // public function printDisbursementReportPaidBeneficiaries($school_id, $year)
+    // {
+    //     $qry = DB::table('payment_disbursement_details as t1')
+    //         ->join('school_information as t2', 't1.school_id', '=', 't2.id')
+    //         ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
+    //         ->join('districts as t4', 't4.id', '=', 't2.district_id')
+    //         ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
+    //         ->join('beneficiary_enrollments as t7', function ($join) {
+    //             $join->on('t7.id', '=', 't6.enrollment_id')
+    //                 ->on('t7.school_id', '=', 't1.school_id');
+    //         })
+    //         ->join('beneficiary_information as t8', 't7.beneficiary_id', '=', 't8.id')
+    //         ->leftJoin('beneficiary_school_statuses as t9', 't7.beneficiary_schoolstatus_id', '=', 't9.id')
+    //         ->select(DB::raw('distinct(t8.id), t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
+    //                           t2.id as school_id,t4.id as district_id,t7.school_grade,t9.name as school_status_name,decrypt(t7.term1_fee as term1_fees,decrypt(t7.term2_fees) as term2_fees,
+    //                           decrypt(t7.term3_fees) as term3_fees,decrypt(t7.exam_fees) as exam_fees,decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name,decrypt(t7.annual_fees) as school_fees'))
+    //         ->where('t3.payment_year', $year)
+    //         ->where('t2.id', $school_id);
+    //     return $qry->get();
+    // }
 
     // public function getDisbursementReportForSchools(Request $req)
     // {
