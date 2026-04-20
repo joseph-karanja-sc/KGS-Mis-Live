@@ -3563,7 +3563,7 @@ class Reports extends Controller
             ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
             ->join('beneficiary_information as t8', 't1.beneficiary_id', '=', 't8.id')
             ->select(DB::raw('t3.payment_ref_no, t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
-                              count(t6.enrollment_id) as no_of_beneficiaries,t2.id as school_id,t4.id as district_id,decrypt(t1.amount_transfered) as total_disbursement,
+                              count(t6.enrollment_id) as no_of_beneficiaries,t2.id as school_id,t4.id as district_id,t1.total_payable_fees as total_disbursement,
                               decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name,sum(t1.total_payable_fees) as total_school_fees'))
             ->where('t3.payment_year', $year)
             // ->where('t3.payment_ref_no','KGS/PAY/REQ/2025/0002')
