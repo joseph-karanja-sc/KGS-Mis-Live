@@ -3614,7 +3614,8 @@ class Reports extends Controller
             ->select(DB::raw('distinct(t8.id), t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
                               t2.id as school_id,t4.id as district_id,t1.confirmed_grade as school_grade,t9.name as school_status_name,
                               t1.term1_fee as term1_fees,t1.term2_fee as term2_fees,
-                              t1.term3_fee as term3_fees,t1.exam_fees,
+                              t1.term3_fee as term3_fees,
+                              t1.exam_fees, t1.additional_fee_amount,
                               decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name, t1.total_payable_fees as school_fees'))
             ->where('t3.payment_year', $year)
             ->where('t2.id', $school_id);
@@ -3820,7 +3821,9 @@ class Reports extends Controller
                 $term1_fees = ($beneficiaryDetail->term1_fees > 0) ? $beneficiaryDetail->term1_fees : 0;
                 $term2_fees = ($beneficiaryDetail->term2_fees > 0) ? $beneficiaryDetail->term2_fees : 0;
                 $term3_fees = ($beneficiaryDetail->term3_fees > 0) ? $beneficiaryDetail->term3_fees : 0;
-                $fees = $term1_fees + $term2_fees + $term3_fees;
+                $additional_fee_amount = ($beneficiaryDetail->additional_fee_amount > 0) ? $beneficiaryDetail->additional_fee_amount : 0;
+                // $fees = $term1_fees + $term2_fees + $term3_fees;
+                $fees = $term1_fees + $term2_fees + $term3_fees + $additional_fee_amount;
                 $htmlTable .= '<tr>
                              <td>' . $beneficiaryDetail->beneficiary_no . '</td>
                              <td>' . $beneficiaryDetail->first_name . '</td>
