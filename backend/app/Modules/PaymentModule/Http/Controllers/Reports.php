@@ -3609,7 +3609,7 @@ class Reports extends Controller
             //     $join->on('t7.id', '=', 't6.enrollment_id')
             //         ->on('t7.school_id', '=', 't1.school_id');
             // })
-            ->join('beneficiary_information as t8', 't1.beneficiary_id', '=', 't8.id')
+            ->join('beneficiary_information as t8', 't1.girl_id', '=', 't8.id')
             ->leftJoin('beneficiary_school_statuses as t9', 't1.beneficiary_schoolstatus_id', '=', 't9.id')
             ->select(DB::raw('distinct(t8.id), t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
                               t2.id as school_id,t4.id as district_id,t1.confirmed_grade as school_grade,t9.name as school_status_name,
@@ -3766,7 +3766,7 @@ class Reports extends Controller
 
             //Payment request details
             $paymentReqDetails = $this->getDisbursementReportPayReqDetails($result->school_id, $year);
-            Log::info('Payment request details query: ' . DB::getQueryLog());
+            // Log::info('Payment request details query: ' . DB::getQueryLog());
             Log::info('Payment request details: ' . json_encode($paymentReqDetails));
             $htmlTable = '
                <table border="1" cellpadding="3" align="center">
