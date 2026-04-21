@@ -3519,9 +3519,11 @@ class Reports extends Controller
         $district = $req->input('district');
         $for_schools_flag = $req->input('for_schools_flag');
         try {
-            $qry = DB::table('sa_app_beneficiary_list_3 as t1')
+            // $qry = DB::table('sa_app_beneficiary_list_3 as t1')
+            $qry = DB::table('beneficiary_payresponses_report as t1')
                 ->join('school_information as t2', 't1.school_id', '=', 't2.id')
-                ->join('districts as t4', DB::raw("TRIM(SUBSTRING_INDEX(t1.school_district, '-', 1))"),'=', 't4.code')
+                // ->join('districts as t4', DB::raw("TRIM(SUBSTRING_INDEX(t1.school_district, '-', 1))"),'=', 't4.code')
+                ->join('districts as t4', 't1.school_district_id','=', 't4.id')
                 // ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
                 // ->join('districts as t4', 't4.id', '=', 't2.district_id')
                 // ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
@@ -3532,11 +3534,11 @@ class Reports extends Controller
                 // ->join('beneficiary_information as t8', 't7.beneficiary_id', '=', 't8.id')
                 ->select(DB::raw("t1.id,t1.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
                                   t2.id as school_id,t4.id as district_id,
-                                  decrypt(t1.first_name) as first_name,decrypt(t1.last_name) as last_name,t1.grant_amount as school_fees"))
-                ->where('t1.in_excel','=', 1)
+                                  t1.first_name,t1.surname as last_name,t1.total_payable_fees as school_fees"))
+                // ->where('t1.in_excel','=', 1)
                 ->where('t4.id', $district);
             if (isset($for_schools_flag) && $for_schools_flag == 1) {
-                $qry->select(DB::raw('t2.id,t2.name as school_name,t4.name as district_name,sum(t1.grant_amount) as school_fees,
+                $qry->select(DB::raw('t2.id,t2.name as school_name,t4.name as district_name,sum(t1.total_payable_fees) as school_fees,
                                       COUNT(t1.id) as no_of_beneficiaries'))
                     ->groupBy('t2.id');
             }
@@ -3561,10 +3563,10 @@ class Reports extends Controller
             ->join('school_information as t2', 't1.school_id', '=', 't2.id')
             ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
             ->join('districts as t4', 't4.id', '=', 't2.district_id')
-            ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
+            // ->join('beneficiary_payment_records as t6', 't6.payment_request_id', '=', 't3.id')
             ->join('beneficiary_information as t8', 't1.beneficiary_id', '=', 't8.id')
             ->select(DB::raw('t3.payment_ref_no, t8.beneficiary_id as beneficiary_no,t2.name as school_name, t4.name as district_name,
-                              count(t6.enrollment_id) as no_of_beneficiaries,t2.id as school_id,t4.id as district_id,t1.total_payable_fees as total_disbursement,
+                              count(t1.id) as no_of_beneficiaries,t2.id as school_id,t4.id as district_id,t1.total_payable_fees as total_disbursement,
                               decrypt(t8.first_name) as first_name,decrypt(t8.last_name) as last_name,sum(t1.total_payable_fees) as total_school_fees'))
             ->where('t3.payment_year', $year)
             // ->where('t3.payment_ref_no','KGS/PAY/REQ/2025/0002')
