@@ -8,6 +8,7 @@ use App\Exports\PaymentScheduleExportDisbursed;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use PDF;
 use Maatwebsite\Excel\Facades\Excel;
@@ -3763,6 +3764,8 @@ class Reports extends Controller
 
             //Payment request details
             $paymentReqDetails = $this->getDisbursementReportPayReqDetails($result->school_id, $year);
+            Log::info('Payment request details query: ' . DB::getQueryLog());
+            Log::info('Payment request details: ' . json_encode($paymentReqDetails));
             $htmlTable = '
                <table border="1" cellpadding="3" align="center">
                <thead>
