@@ -3666,41 +3666,20 @@ class Reports extends Controller
         $selected_schools = json_decode($selected_schools);
         $district_id = $req->input('district_id');
         $district_name = getSingleRecordColValue('districts', array('id' => $district_id), 'name');
-        $qry = DB::table('beneficiary_payresponses_report as t1')
+        $qry = DB::table('payment_disbursement_details as t1')
             ->join('school_information as t2', 't1.school_id', '=', 't2.id')
             ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
             ->join('districts as t4', 't4.id', '=', 't2.district_id')
             ->join('provinces as t5', 't5.id', '=', 't4.province_id')
             ->select(DB::raw('t2.code as school_code,t2.name as school_name, t4.name as district_name, t5.name as province_name,
                               t4.code as district_code,t2.id as school_id,t4.id as district_id,t5.id as province_id,
-                              sum(t1.total_payable_fees) as total_disbursement'))
+                              sum(decrypt(t1.amount_transfered)) as total_disbursement'))
             ->where('t3.payment_year', $year)
             ->whereIn('t2.id', $selected_schools)
             ->groupBy('t2.id');
         $results = $qry->get();
         $this->printDisbursementReport($results, $district_name, $year);
     }
-    // public function getDisbursementReportForSchools(Request $req)
-    // {
-    //     $year = $req->input('year');
-    //     $selected_schools = $req->input('selected_schools');
-    //     $selected_schools = json_decode($selected_schools);
-    //     $district_id = $req->input('district_id');
-    //     $district_name = getSingleRecordColValue('districts', array('id' => $district_id), 'name');
-    //     $qry = DB::table('payment_disbursement_details as t1')
-    //         ->join('school_information as t2', 't1.school_id', '=', 't2.id')
-    //         ->join('payment_request_details as t3', 't1.payment_request_id', '=', 't3.id')
-    //         ->join('districts as t4', 't4.id', '=', 't2.district_id')
-    //         ->join('provinces as t5', 't5.id', '=', 't4.province_id')
-    //         ->select(DB::raw('t2.code as school_code,t2.name as school_name, t4.name as district_name, t5.name as province_name,
-    //                           t4.code as district_code,t2.id as school_id,t4.id as district_id,t5.id as province_id,
-    //                           sum(decrypt(t1.amount_transfered)) as total_disbursement'))
-    //         ->where('t3.payment_year', $year)
-    //         ->whereIn('t2.id', $selected_schools)
-    //         ->groupBy('t2.id');
-    //     $results = $qry->get();
-    //     $this->printDisbursementReport($results, $district_name, $year);
-    // }
 
     // public function getDisbursementReportForDistrict(Request $req)
     // {
